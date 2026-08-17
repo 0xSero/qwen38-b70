@@ -46,10 +46,15 @@ more than the second card recovers); TP2 wins on decode and KV capacity.
 
 ### MTP speculative decoding (`ENABLE_MTP=1`)
 
-| Task              | tok/s | Draft acceptance |
-|-------------------|------:|-----------------:|
-| Easy (counting)   | 84.3  | 97.2%            |
-| Hard (random gen) | 49.0  | 37.5%            |
+| Config            | Task              | tok/s | Baseline | Draft acceptance |
+|-------------------|-------------------|------:|---------:|-----------------:|
+| 2x B70 (TP2)      | Easy (counting)   | 84.3  | 51.1     | 97.2%           |
+| 2x B70 (TP2)      | Hard (random gen) | 49.0  | 51.1     | 37.5%           |
+| 1x B70 (64k ctx)  | Easy (counting)   | 61.7  | 33.3     | 97.2%           |
+| 1x B70 (64k ctx)  | Hard (random gen) | 28.2  | 33.3     | 29.6%           |
+
+Note: on 1x B70 the draft model plus 131k context exceeds VRAM
+(UR_RESULT_ERROR_DEVICE_LOST); 65536 is the validated MTP context on a single card.
 
 Decode is nearly flat with context: only 16 of 64 layers are full attention
 (Qwen3.8 hybrid GDN); the linear-attention layers are O(1) per token.
