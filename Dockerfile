@@ -30,7 +30,7 @@ RUN cd /build/llama.cpp \
 # yet enumerate devices on publicly available GPU driver stacks; JIT is the
 # verified-working path and reaches decode parity with the lab record.)
 RUN cd /build/llama.cpp \
-    && source /opt/intel/oneapi/setvars.sh --force \
+    && . /opt/intel/oneapi/setvars.sh --force \
     && cmake -G "Unix Makefiles" -S . -B build-sycl \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=/usr/bin/cc \
