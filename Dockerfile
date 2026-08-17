@@ -29,6 +29,7 @@ RUN cd /build/llama.cpp \
 # SYCL JIT build (AOT bmg_g31 requires oneAPI 2026.1.x whose UR runtime does not
 # yet enumerate devices on publicly available GPU driver stacks; JIT is the
 # verified-working path and reaches decode parity with the lab record.)
+SHELL ["/bin/bash", "-c"]
 RUN cd /build/llama.cpp \
     && . /opt/intel/oneapi/setvars.sh --force \
     && cmake -G "Unix Makefiles" -S . -B build-sycl \
