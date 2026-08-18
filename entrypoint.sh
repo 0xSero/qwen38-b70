@@ -34,7 +34,7 @@ if [ "$ENABLE_MTP" = "1" ]; then
     if [ ! -f "$MODELS_DIR/$MTP_FILE" ]; then
         hf download "$MODEL_REPO" "$MTP_FILE" --revision "$MODEL_REV" --local-dir "$MODELS_DIR"
     fi
-    DRAFT_ARGS=(--spec-type mtp --model-draft "$MODELS_DIR/$MTP_FILE" --draft-max 8)
+    DRAFT_ARGS=(--spec-type draft-mtp --model-draft "$MODELS_DIR/$MTP_FILE" --spec-draft-n-max 8)
 fi
 
 # Optional vision projector (image input; encoder on CPU — GPU offload hangs the xe driver)
