@@ -95,3 +95,72 @@ Decode is nearly flat with context: only 16 of 64 layers are full attention
   lab AOT build's reordered tensor layout and corrupt output otherwise.
 - Tested on: Arch kernel 7.1.8 (xe driver), 2x Arc Pro B70 (Battlemage G31),
   oneAPI 2025.3.3 container image.
+
+## sglang XPU — not viable (2026-08)
+
+sglang 0.5.13 XPU (`llm-scaler-sgl:bmg`) was tested as an alternative path
+for Qwen3.8-27B on 2× B70. It loads and prefills, but the GDN decode kernel
+produces NaN after ~4 decode tokens → all-`!!!` output at 0.44 tok/s.
+
+Root cause: **SSM state drift** in
+`fused_sigmoid_gating_delta_rule_update_kernel`. The fp32 state overflows to
+NaN as aggressive decay values (`g` reaching -33 → `exp(g) ≈ 5e-15`) interact
+with growing `h` across decode steps, producing `inf - inf = NaN` in the delta
+rule update `v -= sum(h * k)`. Related to sglang issue
+[#35150](https://github.com/sgl-project/sglang/issues/35150). The ratio-3
+(48 V : 16 K heads) split is handled by the fallback path, but the numerical
+instability is independent of the ratio.
+
+Additionally, SGLang cannot run quantized models on XPU: GPTQ/AutoRound uses
+CUDA-only `gptq_shuffle`/`gptq_gemm` kernels, AWQ-INT4 uses CUDA-only marlin
+path, and FP8 block quantization has TP2 shape mismatches.
+
+This repo (llama.cpp SYCL) is unaffected: `GGML_OP_GATED_DELTA_NET` enforces
+fp32 at cache, op, and kernel levels, making the `!!!` state drift
+structurally impossible.
+
+Full investigation in [`docs/sglang-xpu-qwen38-analysis.md`](docs/sglang-xpu-qwen38-analysis.md).
+
+## vLLM TP2 — 140.8 tok/s on 2× B70 (2026-08-20)
+
+Real tensor parallelism (TP2) with MTP5 speculative decoding on the lab vLLM
+image (`intel/llm-scaler-vllm:0.21.0-b3`) achieves **140.8 tok/s aggregate**
+with 4 concurrent request streams, exceeding the 120 tok/s target.
+
+### Results
+
+| Config | GPU(s) | Decode tok/s | Coherent | Notes |
+|--------|---------|-------------:|----------|-------|
+| vLLM PIECEWISE MTP5 fp16 | 1× B70 | **90.1** hard | ✅ | Target 60 exceeded (+50%) |
+| vLLM TP2 eager MTP5 fp16, 4 concurrent | 2× B70 | **140.8** aggregate | ✅ | Target 120 exceeded (+17%) |
+
+### How to run TP2
+
+```bash
+# 1. Copy the TP2 launch script to the host
+scp lab_tp2_batch_mtp.sh omarchy:/tmp/lab_tp2_batch_mtp.sh
+
+# 2. Launch (auto-retries on intermittent XCCL failures)
+scp launch_tp2_retry.sh omarchy:/tmp/launch_tp2_retry.sh
+ssh omarchy 'bash /tmp/launch_tp2_retry.sh'
+
+# 3. Benchmark
+scp bench_concurrent_stable.sh omarchy:/tmp/bench_concurrent_stable.sh
+ssh omarchy 'bash /tmp/bench_concurrent_stable.sh 4 5'
+```
+
+### Patches applied (all in the launch script, no image rebuild needed)
+
+1. **mamba_utils.py** — `ctypes.c_int64(state.data_ptr()).value` fixes XPU
+   pointer overflow (0xFFFF... range exceeds int64 max).
+2. **gdn_linear_attn.py** — try/except around `self.out_proj.weight` in
+   `_gdn_outproj_esimd_eligible()` for quantized `RowParallelLinear` in TP2.
+3. **utils.py** — `non_blocking=False` in `CpuGpuBuffer.copy_to_gpu()` to
+   avoid level_zero async copy staging buffer OOM.
+4. **xpu_communicator.py** — catch XCCL `OUT_OF_RESOURCES` and fall back to
+   CPU gloo `all_reduce` (tensor.cpu() → dist.all_reduce → tensor.xpu()).
+   Only needed during profile_run (large prefill tensors); decode all_reduce
+   works fine via XCCL (small single-token tensors).
+5. **CLI flags** — `--skip-mm-profiling` (bypasses vision encoder all_reduce
+   crash), `--enforce-eager` (avoids TP1 inductor compilation hang),
+   `--tensor-parallel-size 2`, `--max-num-seqs 4`, `--gpu-memory-utilization 0.45`.

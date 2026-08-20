@@ -10,7 +10,8 @@ services:
       # The Intel level-zero GPU driver enumerates via by-path; --device does
       # not recreate it, it must be mounted explicitly.
       - /dev/dri/by-path:/dev/dri/by-path:ro
-      - ./models:/models
+      - /home/sero/models/q38-pinned:/models
+      - /home/sero/qwen38-b70/entrypoint.sh:/entrypoint.sh:ro
     environment:
       - MODELS_DIR=/models
       - GPU_COUNT=2        # 1 or 2 Arc Pro B70s (1 GPU: no TP, higher prefill)
@@ -18,9 +19,12 @@ services:
       - PARALLEL=1
       - BATCH=8192
       - UBATCH=8192
-      - ENABLE_MTP=0       # 1 = speculative decoding via mtp-Q4_0 draft (84 tok/s easy tasks)
+      - ENABLE_MTP=1       # 1 = speculative decoding via mtp-Q4_0 draft
+      - SPEC_DRAFT_N_MAX=5  # max draft tokens per step (5 = sweet spot)
+      - THREADS=16          # CPU threads for target model
+      - DRAFT_THREADS=16    # CPU threads for draft model
+      - DRAFT_NGL=0         # 0 = CPU draft (runs in parallel with GPU target, no contention)
       - ENABLE_VISION=0    # 1 = image input via mmproj (CPU encoder; GPU offload hangs xe)
-      - THREADS=8
     ipc: host
     shm_size: 8g
     ports:

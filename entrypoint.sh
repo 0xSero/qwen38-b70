@@ -34,7 +34,7 @@ if [ "$ENABLE_MTP" = "1" ]; then
     if [ ! -f "$MODELS_DIR/$MTP_FILE" ]; then
         hf download "$MODEL_REPO" "$MTP_FILE" --revision "$MODEL_REV" --local-dir "$MODELS_DIR"
     fi
-    DRAFT_ARGS=(--spec-type mtp --model-draft "$MODELS_DIR/$MTP_FILE" --draft-max 8)
+    DRAFT_ARGS=(--spec-type draft-mtp --model-draft "$MODELS_DIR/$MTP_FILE" --spec-draft-n-max "${SPEC_DRAFT_N_MAX:-8}" --spec-draft-threads "${DRAFT_THREADS:-16}" --spec-draft-poll 1 --spec-draft-ngl "${DRAFT_NGL:-0}" --spec-draft-device "${DRAFT_DEVICE:-SYCL0}")
 fi
 
 # Optional vision projector (image input; encoder on CPU — GPU offload hangs the xe driver)
@@ -71,8 +71,8 @@ export GGML_SYCL_FUSE_EXT=31
 # - Q4K reorder-family OFF: expects the lab AOT build's reordered layout,
 #   produces corrupted output on stock ggml-org weights under JIT
 export GGML_SYCL_FATTN_MMA=0
-export GGML_SYCL_MMQ_Q4K_REORDER=0
-export GGML_SYCL_FUSED_MMVQ_SWIGLU_Q4K=0
+export GGML_SYCL_MMQ_Q4K_REORDER=1
+export GGML_SYCL_FUSED_MMVQ_SWIGLU_Q4K=1
 export GGML_SYCL_FUSED_MMVQ_PAIR=0
 export GGML_SYCL_FUSED_MMVQ_PAIR_GDN=0
 export GGML_SYCL_FUSED_MMVQ_TRIPLE_ATTN=0
