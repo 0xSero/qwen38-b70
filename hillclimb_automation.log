@@ -445,3 +445,25 @@ Error response from daemon: No such container: vllm-tp2-pw
 [22:59:34]   conc round 3: 43.0 tok/s aggregate (1624 tok in 37.77410817146301s)
 [22:59:34] Recording: | 80 | 2026-08-21 22:52 |  8conc_mtp8_seqs1 | 45.4 hard / 53.7 easy / 44.6 conc×8 agg | ✅ | Config: MTP8, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
 [22:59:34] Done. hard=45.4 easy=53.7 conc=44.6 coherent=✅
+[22:59:35] Git committed and pushed (if possible). Iteration complete.
+[23:27:42] Iteration: KNOB=12conc_mtp8_seqs1 MTP=8 MEM=0.85 SEQS=1 BATCHED=2048 MODELLEN=4096 CONC=12
+[23:27:42] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_12conc_mtp8_seqs1.sh
+[23:27:42] === Container start attempt 1/2 ===
+[23:27:48] Starting container with knob 12conc_mtp8_seqs1 (attempt 1)...
+[23:27:51] Container IP: 172.17.0.3, health URL: http://172.17.0.3:8000/health (attempt 1)
+[23:27:51] Waiting for server health (attempt 1)...
+[23:29:52] Server healthy! (attempt 1)
+[23:30:21] Warmup OK, engine responsive (attempt 1)
+[23:30:23] Benchmarking at http://172.17.0.3:8000 ...
+[23:30:28]   hard run 1: 256 tok in 5520ms = 46.4 tok/s
+[23:30:34]   hard run 2: 256 tok in 5489ms = 46.6 tok/s
+[23:30:39]   hard run 3: 256 tok in 5620ms = 45.6 tok/s
+[23:30:43]   easy run 1: 184 tok in 3507ms = 52.5 tok/s
+[23:30:46]   easy run 2: 184 tok in 3310ms = 55.6 tok/s
+[23:30:50]   easy run 3: 184 tok in 3426ms = 53.7 tok/s
+[23:30:52]   coherence: ✅ (51×37=We need answer user's simple arithmetic: 51*37. Compute: 50*, capital=We need answer user's request: "What is )
+[23:31:54]   conc round 1: 44.5 tok/s aggregate (2436 tok in 54.68211078643799s)
+[23:32:49]   conc round 2: 44.3 tok/s aggregate (2436 tok in 54.97622632980347s)
+[23:33:44]   conc round 3: 43.8 tok/s aggregate (2436 tok in 55.5914192199707s)
+[23:33:44] Recording: | 81 | 2026-08-21 23:27 |  12conc_mtp8_seqs1 | 46.4 hard / 53.7 easy / 44.3 conc×12 agg | ✅ | Config: MTP8, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=12.
+[23:33:44] Done. hard=46.4 easy=53.7 conc=44.3 coherent=✅
