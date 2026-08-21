@@ -9,7 +9,7 @@
 8conc_mtp8_mem070|8|0.70|4|2048|4096|8|DONE|hard=50.5,easy=58.2,conc=interrupted
 12conc_mtp8_mem070|8|0.70|4|2048|4096|12|DONE|hard=48.7,easy=55.8,conc=134.8
 16conc_mtp8_mem070|8|0.70|4|2048|4096|16|DONE|hard=45.0,easy=54.8,conc=123.5
-8conc_mtp6_mem070|6|0.70|4|2048|4096|8
+8conc_mtp6_mem070|6|0.70|4|2048|4096|8|FAIL|engine_dead_gpu_oom
 12conc_mtp6_mem070|6|0.70|4|2048|4096|12
 8conc_mtp5_mem070|5|0.70|4|2048|4096|8
 12conc_mtp5_mem072|5|0.72|4|2048|4096|12
@@ -19,3 +19,4 @@
 20conc_mtp8_mem070|8|0.70|4|2048|4096|20
 24conc_mtp8_mem070|8|0.70|4|2048|4096|24
 12conc_mtp8_mem070|8|0.70|4|2048|4096|12|FAIL|20:17:46|server_not_healthy
+12conc_mtp6_mem070|6|0.70|4|2048|4096|12|FAIL|21:01:17|engine_dead_after_warmup
