@@ -1,0 +1,277 @@
+diff --git a/ggml/src/ggml-sycl/ggml-sycl.cpp b/ggml/src/ggml-sycl/ggml-sycl.cpp
+index b216510db..116ed99c5 100644
+--- a/ggml/src/ggml-sycl/ggml-sycl.cpp
++++ b/ggml/src/ggml-sycl/ggml-sycl.cpp
+@@ -252,6 +252,7 @@ int g_ggml_sycl_fused_swiglu_q8 = 0;
+ int g_ggml_sycl_fused_attn_q8 = 0;
+ int g_ggml_sycl_fused_gdn_q8 = 0;
+ int g_ggml_sycl_fused_mmvq_pair = 0;
++int g_ggml_sycl_fused_mmvq_swiglu_q4k = 0;
+ int g_ggml_sycl_fused_mmvq_pair_gdn = 0;
+ int g_ggml_sycl_fused_mmvq_triple_attn = 0;
+ int g_ggml_sycl_fused_mmvq_triple_gdn = 0;
+@@ -619,6 +620,7 @@ static void ggml_check_sycl() try {
+         g_ggml_sycl_fused_attn_q8 = ggml_sycl_get_env("GGML_SYCL_FUSED_ATTN_Q8", 0) != 0;
+         g_ggml_sycl_fused_gdn_q8 = ggml_sycl_get_env("GGML_SYCL_FUSED_GDN_Q8", 0) != 0;
+         g_ggml_sycl_fused_mmvq_pair = ggml_sycl_get_env("GGML_SYCL_FUSED_MMVQ_PAIR", 0) != 0;
++        g_ggml_sycl_fused_mmvq_swiglu_q4k = ggml_sycl_get_env("GGML_SYCL_FUSED_MMVQ_SWIGLU_Q4K", 0) != 0;
+         g_ggml_sycl_fused_mmvq_pair_gdn = ggml_sycl_get_env("GGML_SYCL_FUSED_MMVQ_PAIR_GDN", 0) != 0;
+         g_ggml_sycl_fused_mmvq_triple_attn = ggml_sycl_get_env("GGML_SYCL_FUSED_MMVQ_TRIPLE_ATTN", 0) != 0;
+         g_ggml_sycl_fused_mmvq_triple_gdn = ggml_sycl_get_env("GGML_SYCL_FUSED_MMVQ_TRIPLE_GDN", 0) != 0;
+@@ -930,6 +932,7 @@ static void ggml_check_sycl() try {
+         fprintf(stderr, "  GGML_SYCL_FUSED_ATTN_Q8: %d\n", g_ggml_sycl_fused_attn_q8);
+         fprintf(stderr, "  GGML_SYCL_FUSED_GDN_Q8: %d\n", g_ggml_sycl_fused_gdn_q8);
+         fprintf(stderr, "  GGML_SYCL_FUSED_MMVQ_PAIR: %d\n", g_ggml_sycl_fused_mmvq_pair);
++        fprintf(stderr, "  GGML_SYCL_FUSED_MMVQ_SWIGLU_Q4K: %d\n", g_ggml_sycl_fused_mmvq_swiglu_q4k);
+         fprintf(stderr, "  GGML_SYCL_FUSED_MMVQ_PAIR_GDN: %d\n", g_ggml_sycl_fused_mmvq_pair_gdn);
+         fprintf(stderr, "  GGML_SYCL_FUSED_MMVQ_TRIPLE_ATTN: %d\n", g_ggml_sycl_fused_mmvq_triple_attn);
+         fprintf(stderr, "  GGML_SYCL_FUSED_MMVQ_TRIPLE_GDN: %d\n", g_ggml_sycl_fused_mmvq_triple_gdn);
+@@ -3943,6 +3946,7 @@ static std::atomic<uint64_t> g_q8_fused_swiglu_prefills{0}; // q8_1 buffers prod
+ static std::atomic<uint64_t> g_q8_fused_attn_prefills{0}; // q8_1 buffers produced by attention gate
+ static std::atomic<uint64_t> g_q8_fused_gdn_prefills{0}; // q8_1 buffers produced by the GDN SILU/MUL tail
+ static std::atomic<uint64_t> g_q8_fused_mmvq_pairs{0}; // one launch serving FFN gate+up
++static std::atomic<uint64_t> g_q4k_fused_mmvq_swiglus{0}; // one launch serving Q4_K FFN gate+up+SWIGLU
+ static std::atomic<uint64_t> g_q8_fused_mmvq_gdn_pairs{0}; // one launch serving recurrent QKV+z
+ static std::atomic<uint64_t> g_q8_fused_mmvq_attn_triples{0}; // one launch serving attention Q/V/K
+ static std::atomic<uint64_t> g_q8_fused_mmvq_gdn_triples{0}; // one launch serving recurrent QKV/z/alpha
+@@ -3961,7 +3965,7 @@ static std::atomic<uint64_t> g_q8_graph_computes{0};
+ static void ggml_sycl_q8_dedup_stats_dump() {
+     fprintf(stderr, "[Q8-DEDUP] graph_computes=%llu quantize_launches=%llu dedup_hits=%llu "
+                     "bypass=%llu fused_prefills=%llu fused_swiglu=%llu fused_attn=%llu fused_gdn=%llu "
+-                    "fused_mmvq_pairs=%llu fused_mmvq_gdn_pairs=%llu fused_mmvq_attn_triples=%llu "
++                    "fused_mmvq_pairs=%llu fused_q4k_mmvq_swiglu=%llu fused_mmvq_gdn_pairs=%llu fused_mmvq_attn_triples=%llu "
+                     "fused_mmvq_gdn_triples=%llu "
+                     "fused_mmvq_gdn_quads=%llu "
+                     "fused_gdn_beta_sigmoids=%llu "
+@@ -3983,6 +3987,7 @@ static void ggml_sycl_q8_dedup_stats_dump() {
+             (unsigned long long) g_q8_fused_attn_prefills.load(),
+             (unsigned long long) g_q8_fused_gdn_prefills.load(),
+             (unsigned long long) g_q8_fused_mmvq_pairs.load(),
++            (unsigned long long) g_q4k_fused_mmvq_swiglus.load(),
+             (unsigned long long) g_q8_fused_mmvq_gdn_pairs.load(),
+             (unsigned long long) g_q8_fused_mmvq_attn_triples.load(),
+             (unsigned long long) g_q8_fused_mmvq_gdn_triples.load(),
+@@ -5994,6 +5999,100 @@ static bool ggml_sycl_fuse_mmvq_pair(
+     return true;
+ }
+ 
++// Lab adaptation of upstream 650913862 for the per-device graph slices emitted
++// by the TP2 meta backend. The public upstream path declines split buffers at
++// the unsliced graph level; here each SYCL backend sees its local gate/up rows,
++// so the same fused row kernel can safely produce the local SWIGLU output.
++static bool ggml_sycl_fuse_q4k_mmvq_swiglu(
++        ggml_backend_sycl_context & ctx, ggml_cgraph * cgraph, int i) {
++    if (!g_ggml_sycl_fused_mmvq_swiglu_q4k || i < 0 || i + 2 >= cgraph->n_nodes) {
++        return false;
++    }
++
++    ggml_tensor * first = cgraph->nodes[i];
++    ggml_tensor * second = cgraph->nodes[i + 1];
++    ggml_tensor * glu = cgraph->nodes[i + 2];
++    if (first == nullptr || second == nullptr || glu == nullptr ||
++            first->op != GGML_OP_MUL_MAT || second->op != GGML_OP_MUL_MAT ||
++            glu->op != GGML_OP_GLU || ggml_get_glu_op(glu) != GGML_GLU_OP_SWIGLU ||
++            ggml_get_op_params_i32(glu, 1) != 0) {
++        return false;
++    }
++
++    ggml_tensor * gate = glu->src[0];
++    ggml_tensor * up = glu->src[1];
++    if (!((gate == first && up == second) || (gate == second && up == first)) ||
++            gate->src[0] == nullptr || gate->src[1] == nullptr ||
++            up->src[0] == nullptr || up->src[1] != gate->src[1]) {
++        return false;
++    }
++
++    const int idxs[3] = { i, i + 1, i + 2 };
++    const enum ggml_op ops[3] = { GGML_OP_MUL_MAT, GGML_OP_MUL_MAT, GGML_OP_GLU };
++    const int outputs[1] = { i + 2 };
++    if (!ggml_can_fuse_subgraph_ext(cgraph, idxs, 3, ops, outputs, 1)) {
++        return false;
++    }
++
++    ggml_tensor * wg = gate->src[0];
++    ggml_tensor * wu = up->src[0];
++    ggml_tensor * act = up->src[1];
++    if (wg->type != GGML_TYPE_Q4_K || wu->type != GGML_TYPE_Q4_K ||
++            act->type != GGML_TYPE_F32 || glu->type != GGML_TYPE_F32 ||
++            !ggml_are_same_shape(wg, wu) || !ggml_are_same_stride(wg, wu) ||
++            !ggml_is_contiguous(wg) || !ggml_is_contiguous(wu) ||
++            !ggml_is_contiguous(act) || !ggml_is_contiguous(glu) ||
++            ggml_backend_buffer_is_sycl_split(wg->buffer) ||
++            ggml_backend_buffer_is_sycl_split(wu->buffer) ||
++            ggml_nrows(act) != 1 || gate->ne[1] != 1 || up->ne[1] != 1 ||
++            act->ne[2] != 1 || act->ne[3] != 1 ||
++            wg->ne[0] != act->ne[0] || wu->ne[0] != act->ne[0] ||
++            gate->ne[0] != wg->ne[1] || up->ne[0] != wu->ne[1] ||
++            glu->ne[0] != wu->ne[1] || glu->ne[1] != 1 ||
++            act->ne[0] % QK8_1 != 0) {
++        return false;
++    }
++
++    opt_for_reorder(&ctx, wu, act, up, mul_mat_algo::MMVQ);
++    opt_for_reorder(&ctx, wg, act, gate, mul_mat_algo::MMVQ);
++    const auto * eu = static_cast<const ggml_tensor_extra_gpu *>(wu->extra);
++    const auto * eg = static_cast<const ggml_tensor_extra_gpu *>(wg->extra);
++    if (eu == nullptr || eg == nullptr ||
++            !eu->optimized_feature.reorder || !eg->optimized_feature.reorder) {
++        return false;
++    }
++
++    const int64_t padded = GGML_PAD(act->ne[0], MATRIX_ROW_PADDING);
++    const size_t q8_size = (size_t) padded * sizeof(block_q8_1) / QK8_1;
++    bool hit = false;
++    char * q8 = ggml_sycl_q8_dedup_lookup(
++        ctx, act, /* reordered SOA = */ 1, act->ne[0], 1, padded, q8_size, hit);
++    if (q8 == nullptr) {
++        return false;
++    }
++    if (!hit) {
++        quantize_row_q8_1_sycl<quantize_and_reorder_q8_1_soa>(
++            static_cast<const float *>(act->data), q8, act->ne[0], 1, padded, ctx.stream());
++        g_q8_quant_launches.fetch_add(1, std::memory_order_relaxed);
++    }
++
++    if (!ggml_sycl_mul_mat_vec_q4_k_reorder_swiglu(
++            wu->data, wg->data, q8, static_cast<float *>(glu->data),
++            (int) act->ne[0], (int) wu->ne[1], ctx.stream())) {
++        return false;
++    }
++
++    // Relative to the two stock mat-vec consumers, one duplicate activation
++    // quantization is eliminated even when this lookup itself was a miss.
++    g_q8_dedup_hits.fetch_add(hit ? 2 : 1, std::memory_order_relaxed);
++    g_q4k_fused_mmvq_swiglus.fetch_add(1, std::memory_order_relaxed);
++    const char * poison = std::getenv("GGML_SYCL_FUSED_MMVQ_SWIGLU_Q4K_POISON");
++    if (poison != nullptr && std::atoi(poison) != 0) {
++        ctx.stream()->memset(glu->data, 0x7f, sizeof(float));
++    }
++    return true;
++}
++
+ static int ggml_sycl_find_gdn_mmvq_pair(const ggml_cgraph * cgraph, int i) {
+     if (!g_ggml_sycl_fused_mmvq_pair_gdn || i < 0 || i >= cgraph->n_nodes) {
+         return -1;
+@@ -8995,6 +9094,11 @@ static void ggml_backend_sycl_graph_compute_impl(ggml_backend_sycl_context * syc
+             continue;
+         }
+ 
++        if (!prof && ggml_sycl_fuse_q4k_mmvq_swiglu(*sycl_ctx, cgraph, i)) {
++            i += 2;
++            continue;
++        }
++
+         if (!prof && i + 1 < cgraph->n_nodes &&
+                 ggml_sycl_fuse_mmvq_pair(
+                     *sycl_ctx, node, cgraph->nodes[i + 1],
+diff --git a/ggml/src/ggml-sycl/mmvq.cpp b/ggml/src/ggml-sycl/mmvq.cpp
+index dd0e00c96..019f40bd7 100644
+--- a/ggml/src/ggml-sycl/mmvq.cpp
++++ b/ggml/src/ggml-sycl/mmvq.cpp
+@@ -2598,6 +2598,88 @@ static void reorder_mul_mat_vec_q4_k_q8_1_sycl(const void * vx, const void * vy,
+                                                                 nrows);   // f377: phase door inside
+ }
+ 
++// Upstream 650913862 fused dense Q4_K gate/up/GLU on one B70. This lab
++// specialization keeps the incumbent tuned MMVQ body untouched and covers
++// only the target-only decode width used by the TP2 endpoint. Interleaving the
++// two independent dot products does not change either one's block walk or
++// subgroup reduction order.
++static void mul_mat_vec_q4_k_reorder_swiglu_kernel(
++        const void * __restrict__ vx_up,
++        const void * __restrict__ vx_gate,
++        const void * __restrict__ vy,
++        float * __restrict__ dst,
++        const int ncols,
++        const int nrows,
++        const sycl::nd_item<3> & nd_item) {
++    using vec_dot      = reorder_vec_dot_q_sycl<GGML_TYPE_Q4_K>;
++    using block_type   = ggml_sycl_reordered::block_q_t<GGML_TYPE_Q4_K>;
++    using block_traits = typename block_type::traits;
++
++    const auto sg           = nd_item.get_sub_group();
++    const int  sg_range     = sg.get_group_linear_range();
++    const int  workgroup_id = nd_item.get_group_linear_id();
++    const int  row          = workgroup_id * sg_range + sg.get_group_linear_id();
++    if (row >= nrows) {
++        return;
++    }
++
++    const int     blocks_per_row              = ncols / block_traits::qk;
++    constexpr int blocks_per_subgroup         = ceil_div(block_traits::vdr_mmvq * WARP_SIZE, block_traits::qi);
++    constexpr int block_elements_per_subgroup = block_traits::qi / block_traits::vdr_mmvq;
++    const int     nblocks                     = nrows * blocks_per_row;
++
++    float partial_up   = 0.0f;
++    float partial_gate = 0.0f;
++    for (int i = sg.get_local_linear_id() / block_elements_per_subgroup;
++         i < blocks_per_row; i += blocks_per_subgroup) {
++        const int ibx = row * blocks_per_row + i;
++        const auto bx_offset = block_type::get_block_offset(ibx, nblocks);
++        const auto d_offset  = block_type::get_d_offset(nrows, ncols, ibx);
++        const int  iby       = i * block_type::block_to_q8_1_ratio();
++        const int8_t * q8_1_quant_ptr = static_cast<const int8_t *>(vy) + iby * QK8_1;
++        const sycl::half2 * q8_1_ds_ptr = reinterpret_cast<const sycl::half2 *>(
++            static_cast<const char *>(vy) + ncols + iby * sizeof(sycl::half2));
++
++#pragma unroll
++        for (int elem = 0; elem < block_elements_per_subgroup; elem += WARP_SIZE) {
++            const int iqs = elem + block_traits::vdr_mmvq *
++                (sg.get_local_linear_id() % block_elements_per_subgroup);
++            partial_up += vec_dot()(vx_up, bx_offset, d_offset,
++                                    q8_1_quant_ptr, q8_1_ds_ptr, iqs);
++            partial_gate += vec_dot()(vx_gate, bx_offset, d_offset,
++                                      q8_1_quant_ptr, q8_1_ds_ptr, iqs);
++        }
++    }
++
++    const float up   = sycl::reduce_over_group(sg, partial_up, std::plus<>());
++    const float gate = sycl::reduce_over_group(sg, partial_gate, std::plus<>());
++    if (sg.leader()) {
++        const float silu = gate / (1.0f + sycl::exp(-gate));
++        dst[row] = silu * up;
++    }
++}
++
++bool ggml_sycl_mul_mat_vec_q4_k_reorder_swiglu(
++        const void * vx_up, const void * vx_gate, const void * vy,
++        float * dst, int ncols, int nrows, dpct::queue_ptr stream) {
++    if (ncols % QK_K != 0 || nrows <= 0 || ggml_sycl_mmvq_use_phase()) {
++        return false;
++    }
++
++    const size_t num_subgroups = (size_t) ggml_sycl_mmvq_subgroups();
++    const int block_num_y = ceil_div(nrows, GGML_SYCL_MMV_Y * (int) num_subgroups);
++    const sycl::range<3> block_nums(1, 1, block_num_y);
++    const sycl::range<3> block_dims(1, GGML_SYCL_MMV_Y, num_subgroups * WARP_SIZE);
++    stream->submit([&](sycl::handler & cgh) {
++        cgh.parallel_for(sycl::nd_range<3>(block_nums * block_dims, block_dims),
++                         [=](sycl::nd_item<3> item) [[sycl::reqd_sub_group_size(WARP_SIZE)]] {
++                             mul_mat_vec_q4_k_reorder_swiglu_kernel(
++                                 vx_up, vx_gate, vy, dst, ncols, nrows, item);
++                         });
++    });
++    return true;
++}
++
+ template <int ncols_dst>
+ static void reorder_mul_mat_vec_q4_k_q8_1_sycl_ncols(
+         const void * vx, const void * vy, float * dst,
+diff --git a/ggml/src/ggml-sycl/mmvq.hpp b/ggml/src/ggml-sycl/mmvq.hpp
+index 9313baa8a..863ccbf38 100644
+--- a/ggml/src/ggml-sycl/mmvq.hpp
++++ b/ggml/src/ggml-sycl/mmvq.hpp
+@@ -63,6 +63,13 @@ bool ggml_sycl_mul_mat_vec_q8_0_reorder_pair(
+     int ncols, int nrows0, int nrows1,
+     dpct::queue_ptr stream);
+ 
++// Decode-only dense Q4_K FFN fusion. Both reordered matrices consume the same
++// Q8_1 activation and write SWIGLU(gate, up) directly. The implementation
++// retains the incumbent SG16 reduction order for each dot product.
++bool ggml_sycl_mul_mat_vec_q4_k_reorder_swiglu(
++    const void * vx_up, const void * vx_gate, const void * vy,
++    float * dst, int ncols, int nrows, dpct::queue_ptr stream);
++
+ // Decode-only Q8_0 triple launcher for full-attention Q/V/K siblings.
+ // All matrices consume the same reordered Q8_1 activation.
+ bool ggml_sycl_mul_mat_vec_q8_0_reorder_triple(
