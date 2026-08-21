@@ -39,7 +39,7 @@ while IFS= read -r line; do
     \#*|"") continue ;;
   esac
   # Check if this knob already has a result marker
-  if echo "$line" | grep -qE '\|(DONE|FAIL)\|'; then
+  if echo "$line" | grep -qE '\|(DONE|FAIL|SKIP)\|'; then
     continue
   fi
   KNOB_LINE="$line"
