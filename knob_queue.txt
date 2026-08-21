@@ -1,17 +1,20 @@
 # Hill-climb knob queue for vLLM TP2 PIECEWISE on 2× B70
 # Format: KNOB_NAME|MTP|MEM_UTIL|MAX_NUM_SEQS|MAX_BATCHED_TOKENS|MAX_MODEL_LEN|CONCURRENCY
 # The script reads the first un-marked line, runs it, and marks it DONE/FAIL.
-# Priority order: most promising first.
-# Note: max_batched_tokens=4096 causes host OOM during compilation, stick to 2048.
-16conc_mtp8_seqs8|8|0.60|8|2048|4096|16
-maxseqs8_mtp8_8conc|8|0.70|8|2048|4096|8
-16conc_mtp8_seqs16|8|0.55|16|2048|4096|16
-maxseqs8_16conc_mtp8|8|0.60|8|2048|4096|16
-mtp6_maxseqs8|6|0.70|8|2048|4096|8
-mtp4_maxseqs8|4|0.72|8|2048|4096|8
-maxseqs2_mtp8_himem|8|0.85|2|2048|4096|4
-batched8k_mtp8|8|0.70|4|8192|4096|8
-mtp8_maxseqs4_himem|8|0.80|4|2048|4096|8
-maxmodel8k_mtp8|8|0.65|4|2048|8192|8
-mtp10_maxseqs8|10|0.65|8|2048|4096|8
-mtp8_maxseqs4_0.75|8|0.75|4|2048|4096|8
+# KNOWN-GOOD: MTP8, seqs=4, mem=0.70, batched=2048 → 93.4 hard agg / 302.6 easy agg (8 conc)
+# KNOWN-GOOD: MTP5, seqs=1, mem=0.85, batched=2048 → 47.4 hard / 149.7 easy (single-stream)
+# Constraints: seqs>4 causes compile timeout. batched>2048 causes host OOM.
+# mem<0.70 causes GPU OOM (too many KV blocks → block table zeroing fails).
+# Strategy: start from known-good 8-concurrent, push concurrency higher.
+8conc_mtp8_mem070|8|0.70|4|2048|4096|8
+12conc_mtp8_mem070|8|0.70|4|2048|4096|12
+16conc_mtp8_mem070|8|0.70|4|2048|4096|16
+8conc_mtp6_mem070|6|0.70|4|2048|4096|8
+12conc_mtp6_mem070|6|0.70|4|2048|4096|12
+8conc_mtp5_mem070|5|0.70|4|2048|4096|8
+12conc_mtp5_mem072|5|0.72|4|2048|4096|12
+8conc_mtp4_mem072|4|0.72|4|2048|4096|8
+6conc_mtp8_mem075|8|0.75|4|2048|4096|6
+4conc_mtp8_mem080|8|0.80|4|2048|4096|4
+20conc_mtp8_mem070|8|0.70|4|2048|4096|20
+24conc_mtp8_mem070|8|0.70|4|2048|4096|24

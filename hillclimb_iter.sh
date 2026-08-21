@@ -13,7 +13,6 @@ MODEL="/home/sero/models/Qwen3.8-27B-int4-AutoRound"
 ENTRY="/tmp/lab_tp2_pw_v11.sh"
 GLOO_KERNELS="/tmp/vllm_gloo_kernels.py"
 LOG="$REPO/hillclimb_automation.log"
-CURL_URL="http://172.17.0.2:8000"
 NOW="$(date '+%Y-%m-%d %H:%M')"
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG"; }
@@ -99,6 +98,12 @@ docker run -d --name "$CONTAINER" --privileged \
   -e CCL_ZE_IPC_EXCHANGE=sockets -e VLLM_LOGGING_LEVEL=INFO \
   --entrypoint /bin/bash "$IMAGE" /entrypoint.sh
 
+# Get the actual container IP (may not be 172.17.0.2 if other containers ran before)
+sleep 2
+CONTAINER_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null)"
+CURL_URL="http://${CONTAINER_IP:-172.17.0.2}:8000"
+log "Container IP: $CONTAINER_IP, health URL: $CURL_URL/health"
+
 # ---------------------------------------------------------------------------
 # 4. Wait for health (up to 10 minutes — compilation can take 3-5 min)
 # ---------------------------------------------------------------------------
@@ -142,8 +147,7 @@ log "Server healthy!"
 # ---------------------------------------------------------------------------
 # 5. Benchmark — single-stream hard + easy, then concurrent
 # ---------------------------------------------------------------------------
-CONTAINER_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER")"
-URL="http://${CONTAINER_IP:-172.17.0.2}:8000"
+URL="$CURL_URL"
 log "Benchmarking at $URL ..."
 
 # Build a ~2.5k-token hard prompt (same as bench-vllm-lab.sh)
