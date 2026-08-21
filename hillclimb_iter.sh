@@ -146,7 +146,13 @@ if [ "$HEALTHY" -ne 1 ]; then
     log "FAIL: server not healthy after 10 min. Container logs (last 30 lines):"
   fi
   docker logs --tail 30 "$CONTAINER" 2>&1 | tee -a "$LOG"
-  echo "$KNOB_LINE|FAIL|$(date '+%H:%M:%S')|server_not_healthy" >> "$QUEUE"
+  python3 -c "
+import sys
+knob = sys.argv[1]; tag = sys.argv[2]; qfile = sys.argv[3]
+with open(qfile) as f: lines = f.readlines()
+out = [l.rstrip('\n') + '|' + tag + '\n' if l.rstrip('\n') == knob else l for l in lines]
+with open(qfile, 'w') as f: f.writelines(out)
+" "$KNOB_LINE" "FAIL|$(date '+%H:%M:%S')|server_not_healthy" "$QUEUE"
   LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
   NEXT_ITER=$((LAST_ITER + 1))
   echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — container died or timeout. Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, batched=${MAX_BATCHED}, modellen=${MAX_MODEL_LEN}, conc=${CONCURRENCY}. See hillclimb_automation.log." >> "$HILL"
@@ -186,7 +192,13 @@ if echo "$WARMUP_RESP" | jq -e '.choices[0].message.content' >/dev/null 2>&1; th
   log "Warmup OK, engine responsive"
 else
   log "FAIL: warmup request failed — engine may be dead. Response: $(echo "$WARMUP_RESP" | head -c 200)"
-  echo "$KNOB_LINE|FAIL|$(date '+%H:%M:%S')|engine_dead_after_warmup" >> "$QUEUE"
+  python3 -c "
+import sys
+knob = sys.argv[1]; tag = sys.argv[2]; qfile = sys.argv[3]
+with open(qfile) as f: lines = f.readlines()
+out = [l.rstrip('\n') + '|' + tag + '\n' if l.rstrip('\n') == knob else l for l in lines]
+with open(qfile, 'w') as f: f.writelines(out)
+" "$KNOB_LINE" "FAIL|$(date '+%H:%M:%S')|engine_dead_after_warmup" "$QUEUE"
   LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
   NEXT_ITER=$((LAST_ITER + 1))
   echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, conc=${CONCURRENCY}." >> "$HILL"
