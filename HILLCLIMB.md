@@ -270,3 +270,4 @@ batching, not dual independent instances.
 | 73 | 2026-08-21 20:56 | 12conc_mtp6_mem070 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP6, mem=0.70, seqs=4, conc=12.
 | 74 | 2026-08-21 21:11 | 12conc_mtp6_mem070 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP6, mem=0.70, seqs=4, conc=12.
 | 75 | 2026-08-21 21:56 | 6conc_mtp8_mem075 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP8, mem=0.75, seqs=4, conc=6.
+| 76 | 2026-08-21 22:11 | 8conc_mtp5_seqs1 | CRASH | — | FAIL — container died or timeout. Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8. See hillclimb_automation.log.

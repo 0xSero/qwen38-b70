@@ -311,3 +311,41 @@ Error response from daemon: No such container: vllm-tp2-pw
 [22:00:29] Server healthy!
 [22:00:29] Benchmarking at http://172.17.0.4:8000 ...
 [22:00:42] FAIL: warmup request failed — engine may be dead. Response: {"error":{"message":"EngineCore encountered an issue. See stack trace (above) for the root cause.","type":"InternalServerError","param":null,"code":500}}
+[22:11:56] Iteration: KNOB=8conc_mtp5_seqs1 MTP=5 MEM=0.85 SEQS=1 BATCHED=2048 MODELLEN=4096 CONC=8
+[22:11:56] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_8conc_mtp5_seqs1.sh
+[22:11:56] Stopping old container...
+[22:11:56] Starting container with knob 8conc_mtp5_seqs1...
+[22:11:58] Container IP: 172.17.0.4, health URL: http://172.17.0.4:8000/health
+[22:11:58] Waiting for server health...
+[22:15:53] Container died after 213s
+[22:15:53] FAIL: container died (likely OOM-kill). Container logs (last 30 lines):
+(Worker_TP0 pid=630) INFO 08-21 20:13:11 [interface.py:669] Padding mamba page size by 2.97% to ensure that mamba page size and attention page size are exactly equal.
+(Worker_TP0 pid=630) INFO 08-21 20:13:11 [xpu.py:396] [XPU]Setting attention block size to 1024 tokens to ensure multiple of 64, set mamba_page_size_padded to 2097152 bytes accordingly, before was 1703936 bytes.
+(Worker_TP1 pid=631) INFO 08-21 20:13:11 [interface.py:492] Setting kv cache block size to 64 for FLASH_ATTN backend.
+(Worker_TP1 pid=631) INFO 08-21 20:13:11 [interface.py:645] Setting attention block size to 832 tokens to ensure that attention page size is >= mamba page size.
+(Worker_TP1 pid=631) INFO 08-21 20:13:11 [interface.py:669] Padding mamba page size by 2.97% to ensure that mamba page size and attention page size are exactly equal.
+(Worker_TP1 pid=631) INFO 08-21 20:13:11 [xpu.py:396] [XPU]Setting attention block size to 1024 tokens to ensure multiple of 64, set mamba_page_size_padded to 2097152 bytes accordingly, before was 1703936 bytes.
+(Worker_TP0 pid=630) /opt/venv/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+(Worker_TP0 pid=630)   return func(*args, **kwargs)
+(Worker_TP0 pid=630) INFO 08-21 20:13:11 [gpu_model_runner.py:5938] Skipping memory profiling for multimodal encoder and encoder cache.
+(Worker_TP1 pid=631) INFO 08-21 20:13:11 [gpu_model_runner.py:5938] Skipping memory profiling for multimodal encoder and encoder cache.
+(Worker_TP1 pid=631) WARNING 08-21 20:13:23 [backends.py:1048] Failed to read file <frozen os>
+(Worker_TP0 pid=630) WARNING 08-21 20:13:23 [backends.py:1048] Failed to read file <frozen os>
+(Worker_TP0 pid=630) INFO 08-21 20:13:23 [backends.py:1089] Using cache directory: /root/.cache/vllm/torch_compile_cache/3eea06c923/rank_0_0/backbone for vLLM's torch.compile
+(Worker_TP0 pid=630) INFO 08-21 20:13:23 [backends.py:1148] Dynamo bytecode transform time: 12.38 s
+(Worker_TP0 pid=630) INFO 08-21 20:13:27 [backends.py:378] Cache the graph of compile range (1, 2048) for later use
+(EngineCore pid=480) INFO 08-21 20:14:12 [shm_broadcast.py:681] No available shared memory broadcast block found in 60 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation, weight/kv cache quantization).
+(Worker_TP0 pid=630) INFO 08-21 20:14:19 [backends.py:393] Compiling a graph for compile range (1, 2048) takes 54.99 s
+(Worker_TP0 pid=630) INFO 08-21 20:14:35 [decorators.py:708] saved AOT compiled function to /root/.cache/vllm/torch_compile_cache/torch_aot_compile/fff70f084a0a699fea9f1475a703dd35b5f9eb5dc08689da915826aa93d9f85d/rank_0_0/model
+(Worker_TP0 pid=630) INFO 08-21 20:14:35 [monitor.py:53] torch.compile took 83.72 s in total
+(Worker_TP0 pid=630) INFO 08-21 20:14:42 [monitor.py:81] Initial profiling/warmup run took 7.76 s
+(Worker_TP0 pid=630) WARNING 08-21 20:14:43 [backends.py:1048] Failed to read file <frozen os>
+(Worker_TP0 pid=630) INFO 08-21 20:14:43 [backends.py:1089] Using cache directory: /root/.cache/vllm/torch_compile_cache/3eea06c923/rank_0_0/eagle_head for vLLM's torch.compile
+(Worker_TP0 pid=630) INFO 08-21 20:14:43 [backends.py:1148] Dynamo bytecode transform time: 1.02 s
+(Worker_TP1 pid=631) WARNING 08-21 20:14:44 [backends.py:1048] Failed to read file <frozen os>
+(EngineCore pid=480) INFO 08-21 20:15:12 [shm_broadcast.py:681] No available shared memory broadcast block found in 60 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation, weight/kv cache quantization).
+(Worker_TP0 pid=630) INFO 08-21 20:15:16 [backends.py:393] Compiling a graph for compile range (1, 2048) takes 32.17 s
+(Worker_TP0 pid=630) INFO 08-21 20:15:16 [decorators.py:708] saved AOT compiled function to /root/.cache/vllm/torch_compile_cache/torch_aot_compile/56ff194f3a03f33bab81a3bb5203dabe896dc0f63dfb27b360bc6d04c66204b0/rank_0_0/model
+(Worker_TP0 pid=630) INFO 08-21 20:15:16 [monitor.py:53] torch.compile took 34.01 s in total
+(Worker_TP0 pid=630) INFO 08-21 20:15:21 [monitor.py:81] Initial profiling/warmup run took 4.45 s
+(Worker_TP0 pid=630) WARNING 08-21 20:15:22 [topk_topp_sampler.py:259] xpu kernel topk_topp_sampler does not support per-request generators. Falling back to PyTorch-native implementation.
