@@ -424,3 +424,25 @@ Error response from daemon: No such container: vllm-tp2-pw
 [22:50:50] Done. hard=55.0 easy=67.1 conc=53.4 coherent=✅
 [22:50:50] NEW BEST detected — updating Current Best table in HILLCLIMB.md
 [22:50:50] Git committed and pushed (if possible). Iteration complete.
+[22:52:53] Iteration: KNOB=8conc_mtp8_seqs1 MTP=8 MEM=0.85 SEQS=1 BATCHED=2048 MODELLEN=4096 CONC=8
+[22:52:53] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_8conc_mtp8_seqs1.sh
+[22:52:53] === Container start attempt 1/2 ===
+[22:52:59] Starting container with knob 8conc_mtp8_seqs1 (attempt 1)...
+[22:53:01] Container IP: 172.17.0.3, health URL: http://172.17.0.3:8000/health (attempt 1)
+[22:53:01] Waiting for server health (attempt 1)...
+[22:56:38] Server healthy! (attempt 1)
+[22:57:06] Warmup OK, engine responsive (attempt 1)
+[22:57:08] Benchmarking at http://172.17.0.3:8000 ...
+[22:57:14]   hard run 1: 256 tok in 5696ms = 44.9 tok/s
+[22:57:19]   hard run 2: 256 tok in 5637ms = 45.4 tok/s
+[22:57:25]   hard run 3: 256 tok in 5636ms = 45.4 tok/s
+[22:57:28]   easy run 1: 184 tok in 3424ms = 53.7 tok/s
+[22:57:32]   easy run 2: 184 tok in 3616ms = 50.9 tok/s
+[22:57:35]   easy run 3: 184 tok in 3307ms = 55.6 tok/s
+[22:57:37]   coherence: ✅ (51×37=We need answer user's simple arithmetic: 51*37. Compute: 50*, capital=We need answer user's request: "What is )
+[22:58:20]   conc round 1: 44.6 tok/s aggregate (1624 tok in 36.37746071815491s)
+[22:58:57]   conc round 2: 44.8 tok/s aggregate (1624 tok in 36.21885895729065s)
+[22:59:34]   conc round 3: 43.0 tok/s aggregate (1624 tok in 37.77410817146301s)
+[22:59:34] Recording: | 80 | 2026-08-21 22:52 |  8conc_mtp8_seqs1 | 45.4 hard / 53.7 easy / 44.6 conc×8 agg | ✅ | Config: MTP8, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
+[22:59:34] Done. hard=45.4 easy=53.7 conc=44.6 coherent=✅
+[22:59:35] Git committed and pushed (if possible). Iteration complete.
