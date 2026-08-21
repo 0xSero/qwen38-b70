@@ -194,10 +194,10 @@ with open(qfile, 'w') as f: f.writelines(out)
   fi
   log "Server healthy! (attempt $ATTEMPT)"
 
-  # Warmup + engine health check
+  # Warmup + engine health check (|| true so curl timeout doesn't kill script under set -e)
   URL="$CURL_URL"
   WARMUP_RESP=$(curl -s --max-time 60 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-    -d "$(build_payload "$HARD_PROMPT" 32)")
+    -d "$(build_payload "$HARD_PROMPT" 32)" || true)
   if echo "$WARMUP_RESP" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
     log "Warmup OK, engine responsive (attempt $ATTEMPT)"
     START_OK=1
@@ -258,7 +258,7 @@ HARD_TPS=()
 for run in 1 2 3; do
   START_MS=$(python3 -c "import time; print(int(time.time()*1000))")
   RESP=$(curl -s --max-time 120 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-    -d "$(build_payload "$HARD_PROMPT" 256)")
+    -d "$(build_payload "$HARD_PROMPT" 256)" || true)
   END_MS=$(python3 -c "import time; print(int(time.time()*1000))")
   N_OUT=$(echo "$RESP" | jq -r '.usage.completion_tokens // 0')
   ELAPSED_MS=$((END_MS - START_MS))
@@ -277,7 +277,7 @@ EASY_TPS=()
 for run in 1 2 3; do
   START_MS=$(python3 -c "import time; print(int(time.time()*1000))")
   RESP=$(curl -s --max-time 120 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-    -d "$(build_payload "$EASY_PROMPT" 256)")
+    -d "$(build_payload "$EASY_PROMPT" 256)" || true)
   END_MS=$(python3 -c "import time; print(int(time.time()*1000))")
   N_OUT=$(echo "$RESP" | jq -r '.usage.completion_tokens // 0')
   ELAPSED_MS=$((END_MS - START_MS))
@@ -289,7 +289,7 @@ EASY_MEDIAN=$(printf '%s\n' "${EASY_TPS[@]}" | sort -n | sed -n 2p)
 
 # --- Coherence check (lenient: answer must appear somewhere in response) ---
 COHERENCE_RESP=$(curl -s --max-time 120 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-  -d "$(build_payload "What is 51 times 37? Answer with just the number." 64)")
+  -d "$(build_payload "What is 51 times 37? Answer with just the number." 64)" || true)
 COHERENCE_TXT=$(echo "$COHERENCE_RESP" | jq -r '.choices[0].message.content // ""')
 COHERENT="✅"
 if ! echo "$COHERENCE_TXT" | grep -q "1887"; then
@@ -297,7 +297,7 @@ if ! echo "$COHERENCE_TXT" | grep -q "1887"; then
   log "  COHERENCE FAIL: 51×37 — got '$(echo "$COHERENCE_TXT" | head -c 80)' expected 1887"
 fi
 PARIS_RESP=$(curl -s --max-time 120 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-  -d "$(build_payload "What is the capital of France? One word." 32)")
+  -d "$(build_payload "What is the capital of France? One word." 32)" || true)
 PARIS_TXT=$(echo "$PARIS_RESP" | jq -r '.choices[0].message.content // ""')
 if ! echo "$PARIS_TXT" | grep -qi "paris"; then
   COHERENT="❌"

@@ -273,3 +273,4 @@ batching, not dual independent instances.
 | 75 | 2026-08-21 21:56 | 6conc_mtp8_mem075 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP8, mem=0.75, seqs=4, conc=6.
 | 76 | 2026-08-21 22:11 | 8conc_mtp5_seqs1 | CRASH | — | FAIL — container died or timeout. Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8. See hillclimb_automation.log.
 | 77 | 2026-08-21 22:27 | ⭐ 8conc_mtp5_seqs1 | 58.4 hard / 71.5 easy / 55.3 conc×8 agg | ✅ | NEW BEST single-stream hard (58.4 vs 50.5). Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
+| 78 | 2026-08-21 22:37 | 12conc_mtp5_seqs1 | CRASH | — | FAIL — engine died after warmup (DEVICE_LOST) on both attempts. Config: MTP5, mem=0.85, seqs=1, conc=12.
