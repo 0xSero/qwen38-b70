@@ -14,7 +14,7 @@ Repo local: `/Users/sero/sessions/qwen38-b70/`. Sync edits to host with `scp`.
 | Config | GPU(s) | Decode tok/s | Prefill tok/s | Coherent | Notes |
 |--------|---------|-------------:|---------------:|----------|-------|
 | ⭐⭐⭐ vLLM lab v0.21.1 PIECEWISE, AutoRound INT4, MTP5, fp16 | 1× B70 | **90.1** hard | — | ✅ | TARGET EXCEEDED. 95.2% acceptance, mean acc len 5.76. intel/llm-scaler-vllm:0.21.0-b3 + ctypes ptr fix + --dtype float16. |
-| ⭐⭐⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP8, fp16, 4 concurrent | 2× B70 | **81.2** hard agg / **258.8** easy agg | — | ✅ | BEST 2× AGGREGATE. PIECEWISE + MTP8 + 4 concurrent. 258.8 tok/s easy aggregate, 81.2 hard aggregate. Single-stream: 50.5 hard / 160.3 easy. |
+| ⭐⭐⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP8, fp16, 8 concurrent | 2× B70 | **93.4** hard agg / **302.6** easy agg | — | ✅ | BEST 2× AGGREGATE. PIECEWISE + MTP8 + 8 concurrent. 302.6 tok/s easy, 93.4 tok/s hard (exceeds 1× single-stream!). Single: 50.5 hard / 160.3 easy. |
 | ⭐⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP5, fp16 | 2× B70 | **47.4** hard / **149.7** easy | — | ✅ | SINGLE-STREAM TP2 PIECEWISE. Inductor codegen patched (codegen override + empty_strided_cpu redirect). 149.7 tok/s easy EXCEEDS 120 target. Graph capture: 4/4 in 3s. |
 | ⭐⭐ Q4_K_M, KV f16, TP2, MTP n-max=5, threads=16, Q4K SwiGLU fusion | 2× B70 | 66.6 hard / 90.1 easy | 935 | ✅ | llama.cpp best (previous). MTP draft on CPU. |
 | ⭐ Q4_K_M, KV f16, MTP n-max=5, Q4K SwiGLU fusion | 1× B70 | 43.0 hard / 56.1 easy | — | ✅ | llama.cpp best 1-GPU (previous). |
@@ -52,6 +52,7 @@ Plateau at MTP6+: all_reduce latency over PCIe (not draft count) is the bottlene
 | 1× B70 | 90.1 tok/s | 60 tok/s | +30.1 tok/s (+50%) | ✅ EXCEEDED |
 | 2× B70 single-stream | 160.3 tok/s (easy) / 50.5 (hard) | 120 tok/s | +40.3 easy (+34%) | ✅ EXCEEDED (easy) |
 | 2× B70 4× concurrent | 258.8 tok/s (easy agg) / 81.2 (hard agg) | 120 tok/s | +138.8 agg (+116%) | ✅ EXCEEDED |
+| 2× B70 8× concurrent | 302.6 tok/s (easy agg) / 93.4 (hard agg) | 120 tok/s | +182.6 agg (+152%) | ✅ EXCEEDED |
 
 ### Known ceilings (lab results)
 | Config | Decode tok/s | Notes |
@@ -168,6 +169,7 @@ before moving on.
 | 42 | 2026-08-21 14:00 | ⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP5 (inductor codegen patched) | **47.4** hard / **149.7** easy | ✅ | **BREAKTHROUGH: TP2 PIECEWISE WORKS!** Two patches cracked the inductor blocker: (1) Replace `_AllReduce_Kernel`/`_AllReduceKernel`/`_WaitKernel.codegen()` with parent `_CollectiveKernel.codegen()` → compiled code uses `python_kernel_name` (runtime dispatch) instead of CPU C shim. (2) Monkey-patch `_empty_strided_cpu` → `_empty_strided_xpu` in `torch._C._dynamo.guards` → collective buffers allocated on XPU, not CPU. Result: `copy_()` becomes XPU→XPU (no D2H sync, works in command graph). Graph capture: 4/4 in 3s. Compilation: 95s. Coherent (51×37=1887, Paris). Single-stream easy 149.7 tok/s EXCEEDS 120 target by 25%! Hard 47.4 tok/s — 1.27× over TP2 eager (37.4) but still below 1× (90.1) due to PCIe all_reduce latency. AutoRound INT4, 0.85 mem util. |
 | 43 | 2026-08-21 15:00 | TP2 PIECEWISE MTP6-MTP12 sweep | 50.4-50.5 hard / 158.7-160.3 easy | ✅ | MTP sweep on TP2 PIECEWISE: MTP5=47.4/149.7, MTP6=50.4/159.0, MTP7=50.4/158.7, MTP8=50.5/160.3, MTP10=50.1/159.4, MTP12=50.4/160.0. Plateau at MTP6+ — more draft tokens don't help because all_reduce latency (not draft count) is the bottleneck. MTP8 is marginal best. |
 | 44 | 2026-08-21 15:30 | ⭐⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP8 + 4 concurrent | **81.2** hard agg / **258.8** easy agg | ✅ | **NEW BEST 2× AGGREGATE.** TP2 PIECEWISE + MTP8 + max-num-seqs=4 + 4 concurrent requests. Easy: 258.8 tok/s aggregate (2× the eager aggregate of 140.8!). Hard: 81.2 tok/s aggregate. Single-stream still 50.5/155.6. mem-util=0.70 (reduced from 0.85 to fit batch4 cudagraphs). Coherent (51×37=1887, Paris). PIECEWISE cudagraph eliminates launch overhead, concurrency amortizes all_reduce across sequences. |
+| 45 | 2026-08-21 15:40 | ⭐⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP8 + 8 concurrent | **93.4** hard agg / **302.6** easy agg | ✅ | 8 concurrent streams. Easy: 302.6 tok/s aggregate (+17% over 4×). Hard: 93.4 tok/s aggregate — EXCEEDS 1× single-stream (90.1)! The 2× advantage finally manifests: with enough concurrent load, TP2 PIECEWISE hard aggregate surpasses 1× hard single-stream. |
 
 ## Rules for the overnight agent
 
