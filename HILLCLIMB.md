@@ -269,3 +269,4 @@ batching, not dual independent instances.
 | 72 | 2026-08-21 20:30 |  16conc_mtp8_mem070 | 45.0 hard / 54.8 easy / 123.5 conc×16 agg | ✅ | NEW BEST concurrent hard agg (123.5 vs 93.4). Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=16.
 | 73 | 2026-08-21 20:56 | 12conc_mtp6_mem070 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP6, mem=0.70, seqs=4, conc=12.
 | 74 | 2026-08-21 21:11 | 12conc_mtp6_mem070 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP6, mem=0.70, seqs=4, conc=12.
+| 75 | 2026-08-21 21:56 | 6conc_mtp8_mem075 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP8, mem=0.75, seqs=4, conc=6.

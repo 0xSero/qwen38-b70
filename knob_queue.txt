@@ -1,23 +1,19 @@
 # Hill-climb knob queue for vLLM TP2 PIECEWISE on 2× B70
 # Format: KNOB_NAME|MTP|MEM_UTIL|MAX_NUM_SEQS|MAX_BATCHED_TOKENS|MAX_MODEL_LEN|CONCURRENCY
-# The script reads the first un-marked line, runs it, and marks it DONE/FAIL.
-# KNOWN-GOOD: MTP8, seqs=4, mem=0.70, batched=2048 → 93.4 hard agg / 302.6 easy agg (8 conc)
-# KNOWN-GOOD: MTP5, seqs=1, mem=0.85, batched=2048 → 47.4 hard / 149.7 easy (single-stream)
+# The script reads the first un-marked line, runs it, and marks it DONE/FAIL/SKIP.
+# KNOWN-GOOD: MTP8, seqs=4, mem=0.70, batched=2048 → 134.8 tok/s agg (12 conc)
+# KNOWN-GOOD: MTP5, seqs=1, mem=0.85, batched=2048 → 47.4/149.7 single-stream
 # Constraints: seqs>4 causes compile timeout. batched>2048 causes host OOM.
-# mem<0.70 causes GPU OOM (too many KV blocks → block table zeroing fails).
-# Strategy: start from known-good 8-concurrent, push concurrency higher.
+# mem<0.70 causes GPU OOM. MTP5/6 unstable at seqs=4 — only MTP8 works.
 8conc_mtp8_mem070|8|0.70|4|2048|4096|8|DONE|hard=50.5,easy=58.2,conc=interrupted
 12conc_mtp8_mem070|8|0.70|4|2048|4096|12|DONE|hard=48.7,easy=55.8,conc=134.8
 16conc_mtp8_mem070|8|0.70|4|2048|4096|16|DONE|hard=45.0,easy=54.8,conc=123.5
 8conc_mtp6_mem070|6|0.70|4|2048|4096|8|FAIL|engine_dead_gpu_oom
-12conc_mtp6_mem070|6|0.70|4|2048|4096|12
-8conc_mtp5_mem070|5|0.70|4|2048|4096|8
-12conc_mtp5_mem072|5|0.72|4|2048|4096|12
-8conc_mtp4_mem072|4|0.72|4|2048|4096|8
-6conc_mtp8_mem075|8|0.75|4|2048|4096|6
+12conc_mtp6_mem070|6|0.70|4|2048|4096|12|FAIL|engine_dead_after_warmup
+8conc_mtp5_mem070|5|0.70|4|2048|4096|8|FAIL|container_died_compilation
+12conc_mtp5_mem072|5|0.72|4|2048|4096|12|SKIP|mtp5_unstable
+8conc_mtp4_mem072|4|0.72|4|2048|4096|8|SKIP|mtp4_unstable
+6conc_mtp8_mem075|8|0.75|4|2048|4096|6|FAIL|22:00:42|engine_dead_after_warmup
 4conc_mtp8_mem080|8|0.80|4|2048|4096|4
 20conc_mtp8_mem070|8|0.70|4|2048|4096|20
 24conc_mtp8_mem070|8|0.70|4|2048|4096|24
-12conc_mtp8_mem070|8|0.70|4|2048|4096|12|FAIL|20:17:46|server_not_healthy
-12conc_mtp6_mem070|6|0.70|4|2048|4096|12|FAIL|21:01:17|engine_dead_after_warmup
-12conc_mtp6_mem070|6|0.70|4|2048|4096|12|FAIL|21:15:58|engine_dead_after_warmup
