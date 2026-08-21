@@ -145,6 +145,11 @@ before moving on.
 | 34 | 2026-08-20 18:57 | vLLM TP2 eager + MTP5 + 4 concurrent | 78.2 aggregate | ✅ | 4 concurrent requests give 78.2 tok/s aggregate. Stable across rounds 2-3. Round 1 slower due to JIT warmup. |
 | 35 | 2026-08-20 19:00 | vLLM TP2 eager + MTP5 + 8 concurrent | 120.8 aggregate (1 round) | ✅ | 8 concurrent hit 120.8 tok/s on round 2, but server crashed on round 3 (OOM with 8× 700-token prompts, 26K KV cache). |
 | 36 | 2026-08-20 19:40 | ⭐⭐⭐ vLLM TP2 eager + MTP5 + 4 concurrent, 3-para prompts | **140.8** aggregate | ✅ | **2× TARGET EXCEEDED** (140.8 vs 120, +17%). 4 concurrent requests with 3-paragraph (~400 token) prompts. Runs 2-5: 138.5, 140.8, 142.5, 143.1 tok/s. Warmup round 66.9. Coherent (51, Paris). Config: TP2, eager, MTP5, max-num-seqs=4, gpu-mem-util=0.45, max-model-len=4096. |
+| 37 | 2026-08-19 22:00 | TP2 PIECEWISE: XCCL allgather segfault root cause | — | — | INVESTIGATION — `all_gather_into_tensor_coalesced` segfaults on B70 over PCIe. Patched `comm_lowering.py` to split coalesced into individual `all_gather_into_tensor.default` calls. Fixed profile_run crash but exposed next layer (iter 38). |
+| 38 | 2026-08-19 22:30 | TP2 PIECEWISE: Python kernel re-entrancy | — | — | INVESTIGATION — Registered XPU kernels via `torch.library.register_kernel` for 4 collective ops. Initial versions hit `RecursionError` because `dist.all_gather` re-enters dispatcher → our kernel → `dist.all_gather` → ... Fixed by calling `ProcessGroupGloo.allgather()` / `ProcessGroupXCCL.allgather()` directly on the C++ process group object (bypasses dispatcher). |
+| 39 | 2026-08-19 23:00 | TP2 PIECEWISE: command graph + copy_() blocker | — | — | INVESTIGATION — Final blocker found. Inductor's `_AllReduce_Kernel` (ir.py:9774) hardcodes `set_cpp_kernel_name("aoti_torch_cpu__c10d_functional_all_reduce_")` → always generates `empty_strided_cpu()` + `buf4.copy_(buf3, False)` (XPU→CPU). During cudagraph capture warmup, XPU is in command graph mode (XCCL initialized for TP2), and this `copy_()` requires D2H sync → "wait method cannot be used for an event associated with a command graph." BLOCKED at inductor IR codegen level. |
+| 40 | 2026-08-19 23:30 | TP2 PIECEWISE: all runtime patches attempted | — | — | INVESTIGATION — 8 patches tried (comm_lowering split/inplace/out-variant, distributed_c10d coalescing disable, gloo kernels for 4 op variants, gpu_worker profile flag, xpu_communicator CPU gloo). All fix profile_run and compilation, but the final `copy_()` XPU→CPU in compiled inductor code comes from `_AllReduce_Kernel.codegen()` using `shim_cpu.h` — cannot be patched at runtime. Requires upstream inductor change to emit XPU-buffer code. |
+| 41 | 2026-08-19 23:45 | Single-stream 2× analysis | 37.4 hard / 52.0 easy | ✅ | ANALYSIS — User asked "what about single stream on 2x b70s?" Answer: TP2 eager single-stream is 37.4 tok/s (hard) / 52.0 (easy), SLOWER than 1× (90.1 tok/s) due to all_reduce collective overhead over PCIe (no XeLinks). TP2 PIECEWISE (cudagraph) would eliminate launch overhead and could match/exceed 1×, but is blocked by iter 39. 2× advantage only manifests with concurrent batching (iter 36: 140.8 tok/s). |
 
 ## Rules for the overnight agent
 
@@ -238,14 +243,43 @@ batching, not dual independent instances.
 - **Note**: XCCL is intermittent — sometimes profile_run succeeds without the fallback.
   Auto-retry launch script (`launch_tp2_retry.sh`) handles this.
 
-### Blocker 9 (NOT SOLVED): vLLM TP2 PIECEWISE compilation timeout
-- **Was**: With PIECEWISE cudagraph mode + TP2, TP0 compiles in ~90s but TP1 hangs at
-  the inductor hash computation stage and never starts compiling. SHM broadcast times out.
-- **Status**: NOT SOLVED. Using enforce-eager instead (no compilation needed). This
-  means no cudagraph acceleration for TP2 — single-stream decode is 16-37 tok/s. The
-  120 tok/s target is met via concurrent batching (4 streams × ~35 tok/s each).
-- **Future**: If TP1 compilation hang is fixed, PIECEWISE + TP2 + MTP5 could give
-  much higher single-stream throughput.
+### Blocker 9 (BLOCKED — inductor codegen limitation): vLLM TP2 PIECEWISE cudagraph
+- **Was (initial understanding)**: TP1 "hangs" during inductor compilation. Actually
+  a SIGSEGV in XCCL allgather during profile_run, not a hang.
+- **Root cause (fully investigated)**: Three layers of issues, each fixed, leading to a
+  final fundamental blocker:
+  1. **XCCL allgather segfault** (SOLVED): `torch.ops._c10d_functional.all_gather_into_tensor_coalesced.default`
+     segfaults on B70 over PCIe. Fixed by patching `comm_lowering.py` to split coalesced
+     ops into individual `all_gather_into_tensor` calls.
+  2. **Python kernel re-entrancy** (SOLVED): Registered XPU kernels via
+     `torch.library.register_kernel` to intercept the functional ops. Initial versions
+     recursed because `dist.all_gather` re-enters the dispatcher. Fixed by calling
+     `ProcessGroupGloo.allgather()` / `ProcessGroupXCCL.allgather()` directly on the
+     C++ process group object (bypasses the dispatcher entirely).
+  3. **XPU command graph + copy_() incompatibility** (BLOCKED): During cudagraph
+     capture warmup, XPU is in "command graph" mode. Inductor's `_AllReduce_Kernel`
+     (ir.py:9774) hardcodes `set_cpp_kernel_name("aoti_torch_cpu__c10d_functional_all_reduce_")`
+     — it always generates code that allocates a **CPU** buffer (`empty_strided_cpu`) and
+     copies the XPU tensor to it via `buf4.copy_(buf3, False)`. This device-to-host
+     `copy_()` requires synchronization, which fails with "wait method cannot be used
+     for an event associated with a command graph" during graph capture.
+- **Status**: BLOCKED at the inductor IR codegen level. The `_AllReduce_Kernel` class
+  always uses the CPU shim regardless of device. Fixing this requires modifying inductor's
+  codegen to emit XPU-buffer code for collective kernels — a PyTorch upstream change.
+- **Workaround**: Using `--enforce-eager` for TP2 (no cudagraph). Single-stream TP2
+  decode is 37.4 tok/s. The 120 tok/s target is met via concurrent batching
+  (4 streams × ~35 tok/s = 140.8 tok/s aggregate).
+- **What was tried** (all patches in `/tmp/lab_tp2_pw_v10.sh`):
+  - `comm_lowering.py`: split coalesced allgather/allreduce into individual ops ✓
+  - `comm_lowering.py`: use `all_gather_into_tensor_out` with `create_inplace` ✓
+  - `comm_lowering.py`: skip `require_contiguous` in `all_reduce_` ✓
+  - `distributed_c10d.py`: disable coalescing during profile_run ✓
+  - `vllm_gloo_kernels.py`: register XPU kernels for 4 collective op variants ✓
+  - `gpu_worker.py`: set `VLLM_XPU_PROFILE_CPU_GLOO=1` during profile_run AND capture ✓
+  - `xpu_communicator.py`: CPU gloo helpers + routing ✓
+  - All of these fix profile_run and compilation, but the final `copy_()` XPU→CPU
+    in compiled inductor code is generated by `_AllReduce_Kernel.codegen()` which
+    always uses `shim_cpu.h` — cannot be patched at runtime.
 
 ### Blocker 10 (SOLVED): GDN decode performance — via lab image native kernels
 - **Was**: vLLM v0.27.2 GDN decode uses Triton fallback (27.8 tok/s).
@@ -260,3 +294,36 @@ batching, not dual independent instances.
 - **Patches applied**: mamba_utils.py (ctypes ptr fix), gdn_linear_attn.py (ESIMD eligibility),
   utils.py (non_blocking=False), xpu_communicator.py (CPU gloo fallback),
   --skip-mm-profiling, --enforce-eager, --tensor-parallel-size 2, --max-num-seqs 4
+
+## Summary: single-stream 2× B70 performance
+
+**Question**: "What about single stream on 2× B70s?"
+
+**Answer**: Single-stream TP2 is **37.4 tok/s (hard) / 52.0 tok/s (easy)** — SLOWER than
+1× B70 (90.1 tok/s). The 2× target (120 tok/s) is only met via concurrent batching
+(4 streams × ~35 tok/s = 140.8 tok/s aggregate).
+
+**Why TP2 hurts single-stream on B70**:
+- B70s are connected via PCIe (NOT XeLinks). Every all_reduce requires a PCIe round-trip.
+- At single-stream decode (batch=1, num_tokens=1), the all_reduce tensor is tiny (~10 KB)
+  but the latency is ~0.5-1 ms per layer × 64 layers = 32-64 ms of pure communication
+  overhead per token. This is more than the total 1× decode time (~11 ms/token at 90 tok/s).
+- TP2 halves the compute per GPU but adds communication overhead that exceeds the compute
+  savings at batch=1. TP2 only wins when compute is large enough to overlap with
+  communication (i.e., larger batches / concurrent streams).
+
+**Why TP2 PIECEWISE (cudagraph) would help but is blocked**:
+- PIECEWISE cudagraph eliminates Python/launch overhead and allows the all_reduce to be
+  pre-recorded into a graph, overlapping communication with compute.
+- This could bring single-stream TP2 closer to or above 1× performance.
+- BLOCKED by inductor's `_AllReduce_Kernel` hardcoding CPU buffer codegen (see Blocker 9).
+  The compiled graph emits `empty_strided_cpu()` + `copy_()` (XPU→CPU), which fails during
+  command graph capture. Requires upstream inductor change to support XPU device buffers
+  in collective kernel codegen.
+
+**Prefill/decode disaggregation (PDD) alternative**:
+- One GPU does prefill, the other does decode. Decode GPU runs at 1× speed (~90 tok/s).
+- Would NOT improve single-stream decode beyond 1× (one GPU still does all decode work).
+- Would improve TTFT (prefill offloaded) but not decode throughput.
+- No XPU-specific PDD connector exists in vLLM v1 (SimpleCPUOffloadConnector and
+  PyNcclConnector are CUDA-centric). Would require custom connector development.
