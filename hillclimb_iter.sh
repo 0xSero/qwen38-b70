@@ -2,6 +2,12 @@
 # hillclimb_iter.sh — ONE hill-climb iteration per invocation.
 # Reads knob queue, picks next untried knob, relaunches container,
 # benchmarks (single-stream + concurrent), checks coherence, records in HILLCLIMB.md.
+#
+# Key design: persistent compile cache volume + retry loop.
+# First attempt compiles from scratch (may crash during cudagraph capture due to
+# memory pressure from compilation intermediates). Compiled graphs are saved to the
+# persistent volume. Second attempt loads cached compilation (no memory overhead),
+# leaving headroom for cudagraph capture to succeed.
 set -euo pipefail
 
 REPO="/home/sero/qwen38-b70"
@@ -14,6 +20,7 @@ ENTRY="/tmp/lab_tp2_pw_v11.sh"
 GLOO_KERNELS="/tmp/vllm_gloo_kernels.py"
 LOG="$REPO/hillclimb_automation.log"
 LOCK="$REPO/hillclimb.lock"
+COMPILE_CACHE="$REPO/compile_cache"
 
 # --- Prevent concurrent runs (cron + manual can collide) ---
 if [ -f "$LOCK" ]; then
@@ -62,17 +69,17 @@ log "Iteration: KNOB=$KNOB_NAME MTP=$MTP MEM=$MEM_UTIL SEQS=$MAX_SEQS BATCHED=$M
 # 2. Generate entrypoint with this knob's parameters
 # ---------------------------------------------------------------------------
 ENTRYPOINT="$REPO/entrypoints/ep_${KNOB_NAME}.sh"
-mkdir -p "$REPO/entrypoints"
+mkdir -p "$REPO/entrypoints" "$COMPILE_CACHE"
 
-# Start from the base v11 entrypoint and replace the vllm serve line
+# Start from the base v11 entrypoint and replace the vllm serve line.
+# Filter out the `rm -rf torch_compile_cache` line so the persistent cache survives.
 BASE_EP="$ENTRY"
 if [ ! -f "$BASE_EP" ]; then
   log "ERROR: base entrypoint $BASE_EP not found"
   exit 1
 fi
 
-# Copy everything up to and including the patches, then append our custom serve line
-awk '/^MTP_CONFIG=/{exit} {print}' "$BASE_EP" > "$ENTRYPOINT"
+awk '/^MTP_CONFIG=/{exit} {print}' "$BASE_EP" | grep -v 'rm -rf.*torch_compile_cache' > "$ENTRYPOINT"
 cat >> "$ENTRYPOINT" << EOSERVE
 
 export VLLM_XPU_ENABLE_XPU_GRAPH=1
@@ -93,89 +100,17 @@ chmod +x "$ENTRYPOINT"
 log "Entrypoint written to $ENTRYPOINT"
 
 # ---------------------------------------------------------------------------
-# 3. Stop old container, start new one
+# 3. Start container with retry loop (compile cache warmup strategy)
+#
+# Attempt 1: Fresh compilation. May crash during cudagraph capture because
+#   compilation intermediates consume GPU memory. Compiled graphs are saved
+#   to the persistent volume before the crash.
+# Attempt 2: Loads cached compilation (skips compile step, frees GPU memory).
+#   Cudagraph capture should succeed with the extra headroom.
 # ---------------------------------------------------------------------------
-log "Stopping old container..."
-docker stop "$CONTAINER" 2>/dev/null || true
-docker rm "$CONTAINER" 2>/dev/null || true
-
-log "Starting container with knob $KNOB_NAME..."
-docker run -d --name "$CONTAINER" --privileged \
-  --device /dev/dri:/dev/dri --device /dev/dri/by-path:/dev/dri/by-path \
-  -v "$MODEL:/model:ro" \
-  -v "$ENTRYPOINT:/entrypoint.sh:ro" \
-  -v "$GLOO_KERNELS:/tmp/vllm_gloo_kernels.py:ro" \
-  -e VLLM_XPU_ENABLE_XPU_GRAPH=1 -e VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200 \
-  -e CCL_TOPO_FABRIC_VERTEX_CONNECTION_CHECK=0 -e UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 \
-  -e VLLM_WORKER_MULTIPROC_METHOD=spawn -e ZES_ENABLE_SYSMAN=1 \
-  -e CCL_ZE_IPC_EXCHANGE=sockets -e VLLM_LOGGING_LEVEL=INFO \
-  --entrypoint /bin/bash "$IMAGE" /entrypoint.sh
-
-# Get the actual container IP (may not be 172.17.0.2 if other containers ran before)
-sleep 2
-CONTAINER_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null)"
-CURL_URL="http://${CONTAINER_IP:-172.17.0.2}:8000"
-log "Container IP: $CONTAINER_IP, health URL: $CURL_URL/health"
-
-# ---------------------------------------------------------------------------
-# 4. Wait for health (up to 10 minutes — compilation can take 3-5 min)
-# ---------------------------------------------------------------------------
-log "Waiting for server health..."
-HEALTHY=0
-DEAD=0
-for i in $(seq 1 200); do
-  if curl -sf "$CURL_URL/health" >/dev/null 2>&1; then
-    HEALTHY=1
-    break
-  fi
-  # Check if container died (but only after 60s — compilation pauses docker state)
-  if [ "$i" -gt 20 ]; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
-      DEAD=1
-      log "Container died after $((i*3))s"
-      break
-    fi
-  fi
-  sleep 3
-done
-
-if [ "$HEALTHY" -ne 1 ]; then
-  if [ "$DEAD" -eq 1 ]; then
-    log "FAIL: container died (likely OOM-kill). Container logs (last 30 lines):"
-  else
-    log "FAIL: server not healthy after 10 min. Container logs (last 30 lines):"
-  fi
-  docker logs --tail 30 "$CONTAINER" 2>&1 | tee -a "$LOG"
-  python3 -c "
-import sys
-knob = sys.argv[1]; tag = sys.argv[2]; qfile = sys.argv[3]
-with open(qfile) as f: lines = f.readlines()
-out = [l.rstrip('\n') + '|' + tag + '\n' if l.rstrip('\n') == knob else l for l in lines]
-with open(qfile, 'w') as f: f.writelines(out)
-" "$KNOB_LINE" "FAIL|$(date '+%H:%M:%S')|server_not_healthy" "$QUEUE"
-  LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
-  NEXT_ITER=$((LAST_ITER + 1))
-  echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — container died or timeout. Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, batched=${MAX_BATCHED}, modellen=${MAX_MODEL_LEN}, conc=${CONCURRENCY}. See hillclimb_automation.log." >> "$HILL"
-  cd "$REPO"
-  git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
-  git commit -m "hillclimb: $KNOB_NAME — CRASH (container died)" 2>/dev/null || true
-  exit 1
-fi
-log "Server healthy!"
-
-# ---------------------------------------------------------------------------
-# 5. Benchmark — single-stream hard + easy, then concurrent
-# ---------------------------------------------------------------------------
-URL="$CURL_URL"
-log "Benchmarking at $URL ..."
-
-# Build a ~400-token hard prompt (3 paragraphs — shorter to avoid device loss on TP2 PCIe)
 PARA="The Gated Delta Network is a linear-attention variant that replaces softmax with a gated delta rule update over a recurrent state. Each layer maintains a fixed-size state matrix that is updated in O(1) per token, independent of sequence length, which makes decode throughput nearly flat with context. The delta rule is h = h + g * (v - h . k) where g is a data-dependent sigmoid gate, k a key, and v a value. Aggressive negative g values cause rapid forgetting of old state, keeping the state bounded. Full attention is used every fourth layer to recover exact long-range tokens that the linear path would otherwise forget."
 HARD_PROMPT=""
 for i in $(seq 1 3); do HARD_PROMPT="$HARD_PROMPT$PARA "; done
-
-# Easy prompt (short, counting task)
-EASY_PROMPT="Count from 1 to 50. Put each number on its own line."
 
 build_payload() {
   python3 -c "
@@ -185,13 +120,98 @@ print(json.dumps({'model':'/model','max_tokens':mt,'temperature':0,'top_p':1,'me
 " "$1" "$2"
 }
 
-# --- Warmup + engine health check ---
-WARMUP_RESP=$(curl -s --max-time 60 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-  -d "$(build_payload "$HARD_PROMPT" 32)")
-if echo "$WARMUP_RESP" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
-  log "Warmup OK, engine responsive"
-else
-  log "FAIL: warmup request failed — engine may be dead. Response: $(echo "$WARMUP_RESP" | head -c 200)"
+START_OK=0
+for ATTEMPT in 1 2; do
+  log "=== Container start attempt $ATTEMPT/2 ==="
+  docker stop "$CONTAINER" 2>/dev/null || true
+  docker rm "$CONTAINER" 2>/dev/null || true
+
+  log "Starting container with knob $KNOB_NAME (attempt $ATTEMPT)..."
+  docker run -d --name "$CONTAINER" --privileged \
+    --device /dev/dri:/dev/dri --device /dev/dri/by-path:/dev/dri/by-path \
+    -v "$MODEL:/model:ro" \
+    -v "$ENTRYPOINT:/entrypoint.sh:ro" \
+    -v "$GLOO_KERNELS:/tmp/vllm_gloo_kernels.py:ro" \
+    -v "$COMPILE_CACHE:/root/.cache/vllm/torch_compile_cache" \
+    -e VLLM_XPU_ENABLE_XPU_GRAPH=1 -e VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200 \
+    -e CCL_TOPO_FABRIC_VERTEX_CONNECTION_CHECK=0 -e UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 \
+    -e VLLM_WORKER_MULTIPROC_METHOD=spawn -e ZES_ENABLE_SYSMAN=1 \
+    -e CCL_ZE_IPC_EXCHANGE=sockets -e VLLM_LOGGING_LEVEL=INFO \
+    --entrypoint /bin/bash "$IMAGE" /entrypoint.sh
+
+  sleep 2
+  CONTAINER_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null)"
+  CURL_URL="http://${CONTAINER_IP:-172.17.0.2}:8000"
+  log "Container IP: $CONTAINER_IP, health URL: $CURL_URL/health (attempt $ATTEMPT)"
+
+  # Wait for health (up to 10 min — compilation can take 3-5 min)
+  log "Waiting for server health (attempt $ATTEMPT)..."
+  HEALTHY=0
+  DEAD=0
+  for i in $(seq 1 200); do
+    if curl -sf "$CURL_URL/health" >/dev/null 2>&1; then
+      HEALTHY=1
+      break
+    fi
+    if [ "$i" -gt 20 ]; then
+      if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
+        DEAD=1
+        log "Container died after $((i*3))s (attempt $ATTEMPT)"
+        break
+      fi
+    fi
+    sleep 3
+  done
+
+  if [ "$HEALTHY" -ne 1 ]; then
+    if [ "$DEAD" -eq 1 ]; then
+      log "Container crashed (attempt $ATTEMPT). Last 15 lines:"
+    else
+      log "Server not healthy after 10 min (attempt $ATTEMPT). Last 15 lines:"
+    fi
+    docker logs --tail 15 "$CONTAINER" 2>&1 | tee -a "$LOG" || true
+    if [ "$ATTEMPT" -eq 1 ]; then
+      log "Compile cache should be saved from attempt 1. Retrying with cached compilation..."
+      continue
+    fi
+    # Both attempts failed
+    log "FAIL: container did not become healthy after 2 attempts."
+    docker logs --tail 30 "$CONTAINER" 2>&1 | tee -a "$LOG" || true
+    python3 -c "
+import sys
+knob = sys.argv[1]; tag = sys.argv[2]; qfile = sys.argv[3]
+with open(qfile) as f: lines = f.readlines()
+out = [l.rstrip('\n') + '|' + tag + '\n' if l.rstrip('\n') == knob else l for l in lines]
+with open(qfile, 'w') as f: f.writelines(out)
+" "$KNOB_LINE" "FAIL|$(date '+%H:%M:%S')|server_not_healthy" "$QUEUE"
+    LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
+    NEXT_ITER=$((LAST_ITER + 1))
+    echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — container died or timeout after 2 attempts (compile cache warmup). Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, batched=${MAX_BATCHED}, modellen=${MAX_MODEL_LEN}, conc=${CONCURRENCY}. See hillclimb_automation.log." >> "$HILL"
+    cd "$REPO"
+    git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
+    git commit -m "hillclimb: $KNOB_NAME — CRASH (container died after retry)" 2>/dev/null || true
+    exit 1
+  fi
+  log "Server healthy! (attempt $ATTEMPT)"
+
+  # Warmup + engine health check
+  URL="$CURL_URL"
+  WARMUP_RESP=$(curl -s --max-time 60 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
+    -d "$(build_payload "$HARD_PROMPT" 32)")
+  if echo "$WARMUP_RESP" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+    log "Warmup OK, engine responsive (attempt $ATTEMPT)"
+    START_OK=1
+    break
+  fi
+
+  log "Warmup FAILED (attempt $ATTEMPT): $(echo "$WARMUP_RESP" | head -c 200)"
+  docker logs --tail 15 "$CONTAINER" 2>&1 | tee -a "$LOG" || true
+  if [ "$ATTEMPT" -eq 1 ]; then
+    log "Engine died after warmup on attempt 1. Compile cache saved. Retrying..."
+    continue
+  fi
+  # Both attempts' warmup failed
+  log "FAIL: engine dead after warmup on both attempts."
   python3 -c "
 import sys
 knob = sys.argv[1]; tag = sys.argv[2]; qfile = sys.argv[3]
@@ -201,13 +221,19 @@ with open(qfile, 'w') as f: f.writelines(out)
 " "$KNOB_LINE" "FAIL|$(date '+%H:%M:%S')|engine_dead_after_warmup" "$QUEUE"
   LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
   NEXT_ITER=$((LAST_ITER + 1))
-  echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, conc=${CONCURRENCY}." >> "$HILL"
+  echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — engine died after warmup on both attempts. Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, conc=${CONCURRENCY}." >> "$HILL"
   cd "$REPO"
   git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
-  git commit -m "hillclimb: $KNOB_NAME — CRASH (engine dead after warmup)" 2>/dev/null || true
+  git commit -m "hillclimb: $KNOB_NAME — CRASH (engine dead after warmup, retry)" 2>/dev/null || true
   exit 1
-fi
+done
+
 sleep 2
+URL="$CURL_URL"
+log "Benchmarking at $URL ..."
+
+# Easy prompt (short, counting task)
+EASY_PROMPT="Count from 1 to 50. Put each number on its own line."
 
 # Helper: check if engine is still alive by looking for error in response
 check_engine() {
@@ -222,6 +248,10 @@ check_engine() {
   fi
   return 0
 }
+
+# ---------------------------------------------------------------------------
+# 4. Benchmark — single-stream hard + easy, then concurrent
+# ---------------------------------------------------------------------------
 
 # --- Single-stream hard (3 runs) ---
 HARD_TPS=()
@@ -315,7 +345,7 @@ done
 CONC_MEDIAN=$(printf '%s\n' "${CONC_TPS[@]}" | sort -n | sed -n 2p)
 
 # ---------------------------------------------------------------------------
-# 6. Record in HILLCLIMB.md
+# 5. Record in HILLCLIMB.md
 # ---------------------------------------------------------------------------
 # Find next iteration number from history table
 LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
@@ -383,11 +413,10 @@ log "Done. hard=${HARD_MEDIAN} easy=${EASY_MEDIAN} conc=${CONC_MEDIAN} coherent=
 # If this was a new best, also update Current Best table
 if [ "$IS_BEST" -eq 1 ]; then
   log "NEW BEST detected — updating Current Best table in HILLCLIMB.md"
-  # We'll handle this via a separate sync step
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Git commit on host
+# 6. Git commit on host
 # ---------------------------------------------------------------------------
 cd "$REPO"
 git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
