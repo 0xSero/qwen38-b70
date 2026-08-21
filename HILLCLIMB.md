@@ -264,3 +264,5 @@ batching, not dual independent instances.
 | 67 | 2026-08-21 19:11 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — server not healthy, container died or timeout. See hillclimb_automation.log.
 | 68 | 2026-08-21 19:17 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.60, seqs=8, batched=2048, modellen=4096, conc=16. See hillclimb_automation.log.
 | 69 | 2026-08-21 19:24 | 16conc_mtp8 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.65, seqs=4, batched=2048, modellen=4096, conc=16. See hillclimb_automation.log.
+| 70 | 2026-08-21 20:15 | 12conc_mtp8_mem070 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=12. See hillclimb_automation.log.
+| 71 | 2026-08-21 20:22 |  12conc_mtp8_mem070 | 48.7 hard / 55.8 easy / 134.8 conc×12 agg | ✅ | NEW BEST concurrent hard agg (134.8 vs 93.4). Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=12.

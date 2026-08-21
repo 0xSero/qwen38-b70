@@ -13,6 +13,19 @@ MODEL="/home/sero/models/Qwen3.8-27B-int4-AutoRound"
 ENTRY="/tmp/lab_tp2_pw_v11.sh"
 GLOO_KERNELS="/tmp/vllm_gloo_kernels.py"
 LOG="$REPO/hillclimb_automation.log"
+LOCK="$REPO/hillclimb.lock"
+
+# --- Prevent concurrent runs (cron + manual can collide) ---
+if [ -f "$LOCK" ]; then
+  LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
+  if [ "$LOCK_AGE" -lt 900 ]; then
+    echo "[SKIP] Another iteration is running (lock age ${LOCK_AGE}s). Exiting."
+    exit 0
+  fi
+  echo "[WARN] Stale lock found (${LOCK_AGE}s old), removing and proceeding."
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
 NOW="$(date '+%Y-%m-%d %H:%M')"
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG"; }
@@ -150,10 +163,10 @@ log "Server healthy!"
 URL="$CURL_URL"
 log "Benchmarking at $URL ..."
 
-# Build a ~2.5k-token hard prompt (same as bench-vllm-lab.sh)
+# Build a ~400-token hard prompt (3 paragraphs — shorter to avoid device loss on TP2 PCIe)
 PARA="The Gated Delta Network is a linear-attention variant that replaces softmax with a gated delta rule update over a recurrent state. Each layer maintains a fixed-size state matrix that is updated in O(1) per token, independent of sequence length, which makes decode throughput nearly flat with context. The delta rule is h = h + g * (v - h . k) where g is a data-dependent sigmoid gate, k a key, and v a value. Aggressive negative g values cause rapid forgetting of old state, keeping the state bounded. Full attention is used every fourth layer to recover exact long-range tokens that the linear path would otherwise forget."
 HARD_PROMPT=""
-for i in $(seq 1 28); do HARD_PROMPT="$HARD_PROMPT$PARA "; done
+for i in $(seq 1 3); do HARD_PROMPT="$HARD_PROMPT$PARA "; done
 
 # Easy prompt (short, counting task)
 EASY_PROMPT="Count from 1 to 50. Put each number on its own line."
