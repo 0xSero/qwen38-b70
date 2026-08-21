@@ -14,4 +14,4 @@
 4conc_mtp5_seqs2|5|0.80|2|2048|4096|4|DONE|hard=59.1,easy=68.4,conc=89.8
 8conc_mtp5_seqs2|5|0.80|2|2048|4096|8|DONE|hard=55.6,easy=65.5,conc=86.4
 4conc_mtp8_seqs2|8|0.80|2|2048|4096|4|DONE|hard=46.5,easy=55.1,conc=74.5
-8conc_mtp8_seqs2|8|0.80|2|2048|4096|8
+8conc_mtp8_seqs2|8|0.80|2|2048|4096|8|DONE|hard=45.3,easy=53.1,conc=81.9
