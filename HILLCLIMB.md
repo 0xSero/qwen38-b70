@@ -15,6 +15,7 @@ Repo local: `/Users/sero/sessions/qwen38-b70/`. Sync edits to host with `scp`.
 |--------|---------|-------------:|---------------:|----------|-------|
 | ⭐⭐⭐ vLLM lab v0.21.1 PIECEWISE, AutoRound INT4, MTP5, fp16 | 1× B70 | **90.1** hard | — | ✅ | TARGET EXCEEDED. 95.2% acceptance, mean acc len 5.76. intel/llm-scaler-vllm:0.21.0-b3 + ctypes ptr fix + --dtype float16. |
 | ⭐⭐⭐ vLLM lab v0.21.1 TP2 eager, AutoRound INT4, MTP5, fp16, 4 concurrent | 2× B70 | **140.8** aggregate | — | ✅ | TARGET EXCEEDED. TP2 + MTP5 + 4 concurrent requests. XCCL all_reduce with CPU gloo fallback for profile_run. Patches: GDN ESIMD eligibility, non_blocking=False, ctypes ptr fix. |
+| ⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP5, fp16, seqs=1 | 2× B70 | **58.4** hard / **71.5** easy / 55.3 conc×8 agg | — | ✅ | Hill-climb iter 77. PIECEWISE cudagraph mode, seqs=1, mem=0.85. Persistent compile cache volume. Single-stream hard beats previous PIECEWISE best (50.5). |
 | ⭐⭐ Q4_K_M, KV f16, TP2, MTP n-max=5, threads=16, Q4K SwiGLU fusion | 2× B70 | 66.6 hard / 90.1 easy | 935 | ✅ | llama.cpp best (previous). MTP draft on CPU. |
 | ⭐ Q4_K_M, KV f16, MTP n-max=5, Q4K SwiGLU fusion | 1× B70 | 43.0 hard / 56.1 easy | — | ✅ | llama.cpp best 1-GPU (previous). |
 | Q4_K_M, KV f16, TP2, MTP off, Q4K SwiGLU fusion | 2× B70 | 46.7 | 935 | ✅ | Pre-MTP baseline. Lab gets 49.72 with AOT. |
@@ -272,3 +273,4 @@ batching, not dual independent instances.
 | 75 | 2026-08-21 21:56 | 6conc_mtp8_mem075 | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP8, mem=0.75, seqs=4, conc=6.
 | 76 | 2026-08-21 22:11 | 8conc_mtp5_seqs1 | CRASH | — | FAIL — container died or timeout. Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8. See hillclimb_automation.log.
 | 77 | 2026-08-21 22:27 | ⭐ 8conc_mtp5_seqs1 | 58.4 hard / 71.5 easy / 55.3 conc×8 agg | ✅ | NEW BEST single-stream hard (58.4 vs 50.5). Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
+| 78 | 2026-08-21 22:37 | 12conc_mtp5_seqs1 | CRASH | — | FAIL — engine died after warmup (DEVICE_LOST) on both attempts. Config: MTP5, mem=0.85, seqs=1, conc=12.

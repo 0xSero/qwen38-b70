@@ -371,3 +371,33 @@ Error response from daemon: No such container: vllm-tp2-pw
 [22:32:58] Recording: | 77 | 2026-08-21 22:27 | ⭐ 8conc_mtp5_seqs1 | 58.4 hard / 71.5 easy / 55.3 conc×8 agg | ✅ | NEW BEST single-stream hard (58.4 vs 50.5). Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
 [22:32:58] Done. hard=58.4 easy=71.5 conc=55.3 coherent=✅
 [22:32:58] NEW BEST detected — updating Current Best table in HILLCLIMB.md
+[22:32:58] Git committed and pushed (if possible). Iteration complete.
+[22:34:53] Iteration: KNOB=12conc_mtp5_seqs1 MTP=5 MEM=0.85 SEQS=1 BATCHED=2048 MODELLEN=4096 CONC=12
+[22:34:53] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_12conc_mtp5_seqs1.sh
+[22:34:53] === Container start attempt 1/2 ===
+[22:34:59] Starting container with knob 12conc_mtp5_seqs1 (attempt 1)...
+[22:35:01] Container IP: 172.17.0.4, health URL: http://172.17.0.4:8000/health (attempt 1)
+[22:35:01] Waiting for server health (attempt 1)...
+[22:36:59] Server healthy! (attempt 1)
+[22:37:15] Warmup FAILED (attempt 1): {"error":{"message":"EngineCore encountered an issue. See stack trace (above) for the root cause.","type":"InternalServerError","param":null,"code":500}}
+(EngineCore pid=479) ERROR 08-21 20:37:15 [core.py:1143]     response = self.aggregate(self.get_response())
+(EngineCore pid=479) ERROR 08-21 20:37:15 [core.py:1143]                               ^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=479) ERROR 08-21 20:37:15 [core.py:1143]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 390, in get_response
+(EngineCore pid=479) ERROR 08-21 20:37:15 [core.py:1143]     raise RuntimeError(
+(EngineCore pid=479) ERROR 08-21 20:37:15 [core.py:1143] RuntimeError: Worker failed with error 'level_zero backend failed with error: 20 (UR_RESULT_ERROR_DEVICE_LOST)', please check the stack trace above for the root cause
+(Worker_TP0 pid=629) INFO 08-21 20:37:15 [multiproc_executor.py:775] Parent process exited, terminating worker queues
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704] AsyncLLM output_handler failed.
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704] Traceback (most recent call last):
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 660, in output_handler
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704]     outputs = await engine_core.get_output_async()
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 1005, in get_output_async
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704]     raise self._format_exception(outputs) from None
+(APIServer pid=1) ERROR 08-21 20:37:15 [async_llm.py:704] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above) for the root cause.
+(APIServer pid=1) INFO:     172.17.0.1:40334 - "POST /v1/chat/completions HTTP/1.1" 500 Internal Server Error
+[22:37:15] Engine died after warmup on attempt 1. Compile cache saved. Retrying...
+[22:37:15] === Container start attempt 2/2 ===
+[22:37:17] Starting container with knob 12conc_mtp5_seqs1 (attempt 2)...
+[22:37:19] Container IP: 172.17.0.4, health URL: http://172.17.0.4:8000/health (attempt 2)
+[22:37:19] Waiting for server health (attempt 2)...
+[22:39:14] Server healthy! (attempt 2)
