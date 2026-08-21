@@ -2,7 +2,7 @@
 # Format: KNOB_NAME|MTP|MEM_UTIL|MAX_NUM_SEQS|MAX_BATCHED_TOKENS|MAX_MODEL_LEN|CONCURRENCY
 # The script reads the first un-marked line, runs it, and marks it DONE/FAIL.
 # Priority order: most promising first.
-16concurrent_mtp8|8|0.70|4|2048|4096|16
+16concurrent_mtp8|8|0.70|4|2048|4096|16|DONE|hard=30.9,easy=56.4,conc=0.0
 maxseqs8_mtp8|8|0.70|8|4096|4096|8
 maxseqs8_16conc_mtp8|8|0.70|8|4096|4096|16
 maxseqs16_mtp8|8|0.60|16|4096|4096|16
