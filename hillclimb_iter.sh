@@ -179,10 +179,37 @@ print(json.dumps({'model':'/model','max_tokens':mt,'temperature':0,'top_p':1,'me
 " "$1" "$2"
 }
 
-# --- Warmup ---
-curl -s --max-time 120 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
-  -d "$(build_payload "$HARD_PROMPT" 32)" >/dev/null 2>&1
+# --- Warmup + engine health check ---
+WARMUP_RESP=$(curl -s --max-time 60 "$URL/v1/chat/completions" -H "Content-Type: application/json" \
+  -d "$(build_payload "$HARD_PROMPT" 32)")
+if echo "$WARMUP_RESP" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+  log "Warmup OK, engine responsive"
+else
+  log "FAIL: warmup request failed — engine may be dead. Response: $(echo "$WARMUP_RESP" | head -c 200)"
+  echo "$KNOB_LINE|FAIL|$(date '+%H:%M:%S')|engine_dead_after_warmup" >> "$QUEUE"
+  LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
+  NEXT_ITER=$((LAST_ITER + 1))
+  echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — engine died after warmup (GPU OOM or device lost). Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, conc=${CONCURRENCY}." >> "$HILL"
+  cd "$REPO"
+  git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
+  git commit -m "hillclimb: $KNOB_NAME — CRASH (engine dead after warmup)" 2>/dev/null || true
+  exit 1
+fi
 sleep 2
+
+# Helper: check if engine is still alive by looking for error in response
+check_engine() {
+  local resp="$1"
+  if echo "$resp" | jq -e '.error' >/dev/null 2>&1; then
+    log "Engine error detected: $(echo "$resp" | jq -r '.error.message // .error' | head -c 100)"
+    return 1
+  fi
+  if [ -z "$resp" ] || [ "$resp" = "" ]; then
+    log "Empty response — engine likely dead"
+    return 1
+  fi
+  return 0
+}
 
 # --- Single-stream hard (3 runs) ---
 HARD_TPS=()
@@ -196,6 +223,10 @@ for run in 1 2 3; do
   TPS=$(python3 -c "print(round($N_OUT * 1000.0 / max($ELAPSED_MS,1), 1))")
   HARD_TPS+=("$TPS")
   log "  hard run $run: $N_OUT tok in ${ELAPSED_MS}ms = $TPS tok/s"
+  if ! check_engine "$RESP"; then
+    log "Engine died during hard benchmark — aborting"
+    break
+  fi
 done
 HARD_MEDIAN=$(printf '%s\n' "${HARD_TPS[@]}" | sort -n | sed -n 2p)
 
