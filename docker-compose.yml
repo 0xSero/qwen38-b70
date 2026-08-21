@@ -16,7 +16,7 @@ services:
       - MODELS_DIR=/models
       - GPU_COUNT=2        # 1 or 2 Arc Pro B70s (1 GPU: no TP, higher prefill)
       - CTX_SIZE_OVERRIDE= # blank = 262144 (2 GPU) / 131072 (1 GPU)
-      - PARALLEL=1
+      - PARALLEL=4
       - BATCH=8192
       - UBATCH=8192
       - ENABLE_MTP=1       # 1 = speculative decoding via mtp-Q4_0 draft

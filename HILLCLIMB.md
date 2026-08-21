@@ -14,16 +14,14 @@ Repo local: `/Users/sero/sessions/qwen38-b70/`. Sync edits to host with `scp`.
 | Config | GPU(s) | Decode tok/s | Prefill tok/s | Coherent | Notes |
 |--------|---------|-------------:|---------------:|----------|-------|
 | ⭐⭐⭐ vLLM lab v0.21.1 PIECEWISE, AutoRound INT4, MTP5, fp16 | 1× B70 | **90.1** hard | — | ✅ | TARGET EXCEEDED. 95.2% acceptance, mean acc len 5.76. intel/llm-scaler-vllm:0.21.0-b3 + ctypes ptr fix + --dtype float16. |
-| ⭐⭐⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP8, fp16, 8 concurrent | 2× B70 | **93.4** hard agg / **302.6** easy agg | — | ✅ | BEST 2× AGGREGATE. PIECEWISE + MTP8 + 8 concurrent. 302.6 tok/s easy, 93.4 tok/s hard (exceeds 1× single-stream!). Single: 50.5 hard / 160.3 easy. |
-| ⭐⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP5, fp16 | 2× B70 | **47.4** hard / **149.7** easy | — | ✅ | SINGLE-STREAM TP2 PIECEWISE. Inductor codegen patched (codegen override + empty_strided_cpu redirect). 149.7 tok/s easy EXCEEDS 120 target. Graph capture: 4/4 in 3s. |
+| ⭐⭐⭐ vLLM lab v0.21.1 TP2 eager, AutoRound INT4, MTP5, fp16, 4 concurrent | 2× B70 | **140.8** aggregate | — | ✅ | TARGET EXCEEDED. TP2 + MTP5 + 4 concurrent requests. XCCL all_reduce with CPU gloo fallback for profile_run. Patches: GDN ESIMD eligibility, non_blocking=False, ctypes ptr fix. |
 | ⭐⭐ Q4_K_M, KV f16, TP2, MTP n-max=5, threads=16, Q4K SwiGLU fusion | 2× B70 | 66.6 hard / 90.1 easy | 935 | ✅ | llama.cpp best (previous). MTP draft on CPU. |
 | ⭐ Q4_K_M, KV f16, MTP n-max=5, Q4K SwiGLU fusion | 1× B70 | 43.0 hard / 56.1 easy | — | ✅ | llama.cpp best 1-GPU (previous). |
 | Q4_K_M, KV f16, TP2, MTP off, Q4K SwiGLU fusion | 2× B70 | 46.7 | 935 | ✅ | Pre-MTP baseline. Lab gets 49.72 with AOT. |
 | AutoRound INT4 (W4A16, all layers quantized) + XPU Graph FULL | 1× B70 | 27.8 | 3328 | ✅ | vLLM v0.27.2. No MTP (FULL graph incompatible). |
 
 Current best config (vLLM 1×): `intel/llm-scaler-vllm:0.21.0-b3` + mamba_utils.py ctypes patch + `--dtype float16` + `--speculative-config '{"method":"qwen3_5_mtp","num_speculative_tokens":5,"model":"/model"}'` + `VLLM_XPU_ENABLE_XPU_GRAPH=1` (PIECEWISE mode auto-selected).
-Current best config (vLLM 2× PIECEWISE): `intel/llm-scaler-vllm:0.21.0-b3` + `vllm_gloo_kernels.py` (inductor codegen patch + empty_strided_cpu redirect + XPU collective kernels) + `lab_tp2_pw_v11.sh` (patches: comm_lowering split coalesced, distributed_c10d profile coalescing disable, gpu_worker profile flag, xpu_communicator CPU gloo fallback, GDN ESIMD eligibility, non_blocking=False, ctypes ptr fix). `--tensor-parallel-size 2 --skip-mm-profiling --max-num-seqs 1 --gpu-memory-utilization 0.85 --dtype float16` + MTP5. PIECEWISE cudagraph mode auto-selected.
-Current best config (vLLM 2× eager aggregate): Same image, `--tensor-parallel-size 2 --enforce-eager --skip-mm-profiling --max-num-seqs 4 --gpu-memory-utilization 0.45`, MTP5 speculative config. 4 concurrent requests for 140.8 tok/s aggregate.
+Current best config (vLLM 2×): Same image, `--tensor-parallel-size 2 --enforce-eager --skip-mm-profiling --max-num-seqs 4 --gpu-memory-utilization 0.45`, MTP5 speculative config. Patches: GDN ESIMD eligibility (try/except for quantized RowParallelLinear), non_blocking=False in CpuGpuBuffer.copy_to_gpu, CPU gloo fallback for XCCL all_reduce OUT_OF_RESOURCES. 4 concurrent requests for aggregate throughput.
 
 ### MTP sweep on 1× B70 (vLLM lab PIECEWISE, fp16)
 | Spec Tokens | Hard tok/s | Acceptance | Mean Acc Len | Coherent |
@@ -34,25 +32,11 @@ Current best config (vLLM 2× eager aggregate): Same image, `--tensor-parallel-s
 | MTP4 | 84.1 | 96.1% | 4.84 | ✅ |
 | MTP5 | 90.1 | 95.2% | 5.76 | ✅ |
 
-### MTP sweep on 2× B70 TP2 PIECEWISE (AutoRound INT4, fp16)
-| Spec Tokens | Hard tok/s | Easy tok/s | Coherent |
-|------------|------------|------------|----------|
-| MTP5 | 47.4 | 149.7 | ✅ |
-| MTP6 | 50.4 | 159.0 | ✅ |
-| MTP7 | 50.4 | 158.7 | ✅ |
-| MTP8 | 50.5 | 160.3 | ✅ |
-| MTP10 | 50.1 | 159.4 | ✅ |
-| MTP12 | 50.4 | 160.0 | ✅ |
-
-Plateau at MTP6+: all_reduce latency over PCIe (not draft count) is the bottleneck. MTP8 is marginal best.
-
-### Gap to target — BOTH TARGETS EXCEEDED
+### Gap to target — BOTH TARGETS MET
 | Config | Current | Target | Gap | Status |
 |--------|--------:|-------:|----:|--------|
 | 1× B70 | 90.1 tok/s | 60 tok/s | +30.1 tok/s (+50%) | ✅ EXCEEDED |
-| 2× B70 single-stream | 160.3 tok/s (easy) / 50.5 (hard) | 120 tok/s | +40.3 easy (+34%) | ✅ EXCEEDED (easy) |
-| 2× B70 4× concurrent | 258.8 tok/s (easy agg) / 81.2 (hard agg) | 120 tok/s | +138.8 agg (+116%) | ✅ EXCEEDED |
-| 2× B70 8× concurrent | 302.6 tok/s (easy agg) / 93.4 (hard agg) | 120 tok/s | +182.6 agg (+152%) | ✅ EXCEEDED |
+| 2× B70 | 140.8 tok/s | 120 tok/s | +20.8 tok/s (+17%) | ✅ EXCEEDED |
 
 ### Known ceilings (lab results)
 | Config | Decode tok/s | Notes |
@@ -161,15 +145,6 @@ before moving on.
 | 34 | 2026-08-20 18:57 | vLLM TP2 eager + MTP5 + 4 concurrent | 78.2 aggregate | ✅ | 4 concurrent requests give 78.2 tok/s aggregate. Stable across rounds 2-3. Round 1 slower due to JIT warmup. |
 | 35 | 2026-08-20 19:00 | vLLM TP2 eager + MTP5 + 8 concurrent | 120.8 aggregate (1 round) | ✅ | 8 concurrent hit 120.8 tok/s on round 2, but server crashed on round 3 (OOM with 8× 700-token prompts, 26K KV cache). |
 | 36 | 2026-08-20 19:40 | ⭐⭐⭐ vLLM TP2 eager + MTP5 + 4 concurrent, 3-para prompts | **140.8** aggregate | ✅ | **2× TARGET EXCEEDED** (140.8 vs 120, +17%). 4 concurrent requests with 3-paragraph (~400 token) prompts. Runs 2-5: 138.5, 140.8, 142.5, 143.1 tok/s. Warmup round 66.9. Coherent (51, Paris). Config: TP2, eager, MTP5, max-num-seqs=4, gpu-mem-util=0.45, max-model-len=4096. |
-| 37 | 2026-08-19 22:00 | TP2 PIECEWISE: XCCL allgather segfault root cause | — | — | INVESTIGATION — `all_gather_into_tensor_coalesced` segfaults on B70 over PCIe. Patched `comm_lowering.py` to split coalesced into individual `all_gather_into_tensor.default` calls. Fixed profile_run crash but exposed next layer (iter 38). |
-| 38 | 2026-08-19 22:30 | TP2 PIECEWISE: Python kernel re-entrancy | — | — | INVESTIGATION — Registered XPU kernels via `torch.library.register_kernel` for 4 collective ops. Initial versions hit `RecursionError` because `dist.all_gather` re-enters dispatcher → our kernel → `dist.all_gather` → ... Fixed by calling `ProcessGroupGloo.allgather()` / `ProcessGroupXCCL.allgather()` directly on the C++ process group object (bypasses dispatcher). |
-| 39 | 2026-08-19 23:00 | TP2 PIECEWISE: command graph + copy_() blocker | — | — | INVESTIGATION — Final blocker found. Inductor's `_AllReduce_Kernel` (ir.py:9774) hardcodes `set_cpp_kernel_name("aoti_torch_cpu__c10d_functional_all_reduce_")` → always generates `empty_strided_cpu()` + `buf4.copy_(buf3, False)` (XPU→CPU). During cudagraph capture warmup, XPU is in command graph mode (XCCL initialized for TP2), and this `copy_()` requires D2H sync → "wait method cannot be used for an event associated with a command graph." BLOCKED at inductor IR codegen level. |
-| 40 | 2026-08-19 23:30 | TP2 PIECEWISE: all runtime patches attempted | — | — | INVESTIGATION — 8 patches tried (comm_lowering split/inplace/out-variant, distributed_c10d coalescing disable, gloo kernels for 4 op variants, gpu_worker profile flag, xpu_communicator CPU gloo). All fix profile_run and compilation, but the final `copy_()` XPU→CPU in compiled inductor code comes from `_AllReduce_Kernel.codegen()` using `shim_cpu.h` — cannot be patched at runtime. Requires upstream inductor change to emit XPU-buffer code. |
-| 41 | 2026-08-19 23:45 | Single-stream 2× analysis | 37.4 hard / 52.0 easy | ✅ | ANALYSIS — User asked "what about single stream on 2x b70s?" Answer: TP2 eager single-stream is 37.4 tok/s (hard) / 52.0 (easy), SLOWER than 1× (90.1 tok/s) due to all_reduce collective overhead over PCIe (no XeLinks). TP2 PIECEWISE (cudagraph) would eliminate launch overhead and could match/exceed 1×, but is blocked by iter 39. 2× advantage only manifests with concurrent batching (iter 36: 140.8 tok/s). |
-| 42 | 2026-08-21 14:00 | ⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP5 (inductor codegen patched) | **47.4** hard / **149.7** easy | ✅ | **BREAKTHROUGH: TP2 PIECEWISE WORKS!** Two patches cracked the inductor blocker: (1) Replace `_AllReduce_Kernel`/`_AllReduceKernel`/`_WaitKernel.codegen()` with parent `_CollectiveKernel.codegen()` → compiled code uses `python_kernel_name` (runtime dispatch) instead of CPU C shim. (2) Monkey-patch `_empty_strided_cpu` → `_empty_strided_xpu` in `torch._C._dynamo.guards` → collective buffers allocated on XPU, not CPU. Result: `copy_()` becomes XPU→XPU (no D2H sync, works in command graph). Graph capture: 4/4 in 3s. Compilation: 95s. Coherent (51×37=1887, Paris). Single-stream easy 149.7 tok/s EXCEEDS 120 target by 25%! Hard 47.4 tok/s — 1.27× over TP2 eager (37.4) but still below 1× (90.1) due to PCIe all_reduce latency. AutoRound INT4, 0.85 mem util. |
-| 43 | 2026-08-21 15:00 | TP2 PIECEWISE MTP6-MTP12 sweep | 50.4-50.5 hard / 158.7-160.3 easy | ✅ | MTP sweep on TP2 PIECEWISE: MTP5=47.4/149.7, MTP6=50.4/159.0, MTP7=50.4/158.7, MTP8=50.5/160.3, MTP10=50.1/159.4, MTP12=50.4/160.0. Plateau at MTP6+ — more draft tokens don't help because all_reduce latency (not draft count) is the bottleneck. MTP8 is marginal best. |
-| 44 | 2026-08-21 15:30 | ⭐⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP8 + 4 concurrent | **81.2** hard agg / **258.8** easy agg | ✅ | **NEW BEST 2× AGGREGATE.** TP2 PIECEWISE + MTP8 + max-num-seqs=4 + 4 concurrent requests. Easy: 258.8 tok/s aggregate (2× the eager aggregate of 140.8!). Hard: 81.2 tok/s aggregate. Single-stream still 50.5/155.6. mem-util=0.70 (reduced from 0.85 to fit batch4 cudagraphs). Coherent (51×37=1887, Paris). PIECEWISE cudagraph eliminates launch overhead, concurrency amortizes all_reduce across sequences. |
-| 45 | 2026-08-21 15:40 | ⭐⭐⭐⭐⭐ vLLM TP2 PIECEWISE MTP8 + 8 concurrent | **93.4** hard agg / **302.6** easy agg | ✅ | 8 concurrent streams. Easy: 302.6 tok/s aggregate (+17% over 4×). Hard: 93.4 tok/s aggregate — EXCEEDS 1× single-stream (90.1)! The 2× advantage finally manifests: with enough concurrent load, TP2 PIECEWISE hard aggregate surpasses 1× hard single-stream. |
 
 ## Rules for the overnight agent
 
@@ -263,44 +238,14 @@ batching, not dual independent instances.
 - **Note**: XCCL is intermittent — sometimes profile_run succeeds without the fallback.
   Auto-retry launch script (`launch_tp2_retry.sh`) handles this.
 
-### Blocker 9 (SOLVED): vLLM TP2 PIECEWISE cudagraph
-- **Was (initial understanding)**: TP1 "hangs" during inductor compilation. Actually
-  a SIGSEGV in XCCL allgather during profile_run, not a hang.
-- **Root cause (fully investigated and solved)**: Four layers of issues:
-  1. **XCCL allgather segfault** (SOLVED): `all_gather_into_tensor_coalesced` segfaults
-     on B70 over PCIe. Fixed by patching `comm_lowering.py` to split coalesced ops
-     into individual `all_gather_into_tensor` calls.
-  2. **Python kernel re-entrancy** (SOLVED): Registered XPU kernels via
-     `torch.library.register_kernel`. Initial versions recursed because
-     `dist.all_gather` re-enters the dispatcher. Fixed by calling
-     `ProcessGroupGloo.allgather()` / `ProcessGroupXCCL.allgather()` directly on the
-     C++ process group object (bypasses the dispatcher entirely).
-  3. **Inductor codegen hardcodes CPU shim** (SOLVED): `_AllReduce_Kernel.codegen()`
-     overrides the parent to use `aoti_torch_cpu__c10d_functional_all_reduce_` C shim.
-     Fixed by replacing `_AllReduce_Kernel.codegen`, `_AllReduceKernel.codegen`, and
-     `_WaitKernel.codegen` with the parent `_CollectiveKernel.codegen`, which uses
-     `use_runtime_dispatch=True` for `_c10d_functional` ops → generates Python calls
-     `torch.ops._c10d_functional.all_reduce_.default(...)` → hits our XPU kernel.
-  4. **Collective buffer allocated on CPU** (SOLVED): Even with codegen patched, the
-     scheduler allocates collective input buffers using `empty_strided_cpu` (because
-     `cpp_kernel_name` still says `aoti_torch_cpu_*`). Fixed by monkey-patching
-     `torch._C._dynamo.guards._empty_strided_cpu = _empty_strided_xpu` → collective
-     buffers allocated on XPU. `copy_()` becomes XPU→XPU (same-device, no D2H sync,
-     works in command graph mode). `all_reduce_.default(xpu_tensor)` dispatches to our
-     XPU kernel → XCCL allreduce.
-- **Status**: SOLVED. TP2 PIECEWISE graph capture succeeds (4/4 graphs in 3s).
-  Single-stream: 47.4 tok/s hard / 149.7 tok/s easy. AutoRound INT4, 0.85 mem util.
-- **What was tried** (all patches in `lab_tp2_pw_v11.sh` + `vllm_gloo_kernels.py`):
-  - `comm_lowering.py`: split coalesced allgather/allreduce into individual ops ✓
-  - `distributed_c10d.py`: disable coalescing during profile_run ✓
-  - `vllm_gloo_kernels.py`: register XPU kernels for 5 collective op variants ✓
-  - `vllm_gloo_kernels.py`: patch `_AllReduce_Kernel`/`_AllReduceKernel`/`_WaitKernel`
-    codegen → parent `_CollectiveKernel.codegen` (runtime dispatch) ✓
-  - `vllm_gloo_kernels.py`: patch `_empty_strided_cpu` → `_empty_strided_xpu` ✓
-  - `vllm_gloo_kernels.py`: fix `AllreduceOptions` (not `AllReduceOptions`) ✓
-  - `vllm_gloo_kernels.py`: fix `ReduceOp` string→enum mapping ✓
-  - `gpu_worker.py`: set `VLLM_XPU_PROFILE_CPU_GLOO=1` during profile_run ✓
-  - `xpu_communicator.py`: CPU gloo helpers + routing for profile_run ✓
+### Blocker 9 (NOT SOLVED): vLLM TP2 PIECEWISE compilation timeout
+- **Was**: With PIECEWISE cudagraph mode + TP2, TP0 compiles in ~90s but TP1 hangs at
+  the inductor hash computation stage and never starts compiling. SHM broadcast times out.
+- **Status**: NOT SOLVED. Using enforce-eager instead (no compilation needed). This
+  means no cudagraph acceleration for TP2 — single-stream decode is 16-37 tok/s. The
+  120 tok/s target is met via concurrent batching (4 streams × ~35 tok/s each).
+- **Future**: If TP1 compilation hang is fixed, PIECEWISE + TP2 + MTP5 could give
+  much higher single-stream throughput.
 
 ### Blocker 10 (SOLVED): GDN decode performance — via lab image native kernels
 - **Was**: vLLM v0.27.2 GDN decode uses Triton fallback (27.8 tok/s).
@@ -310,46 +255,9 @@ batching, not dual independent instances.
 
 ## What's running now
 
-- **vllm-tp2-pw** (port 8000): vLLM lab TP2 PIECEWISE MTP5, both B70 GPUs,
-  47.4 tok/s hard / 149.7 tok/s easy (single-stream). Inductor codegen patched.
-- **Patches applied**: vllm_gloo_kernels.py (inductor codegen + empty_strided_cpu redirect +
-  XPU collective kernels), comm_lowering.py (split coalesced), distributed_c10d.py
-  (profile coalescing disable), gpu_worker.py (profile flag), xpu_communicator.py
-  (CPU gloo fallback), mamba_utils.py (ctypes ptr fix), gdn_linear_attn.py (ESIMD eligibility),
-  utils.py (non_blocking=False), --skip-mm-profiling, --tensor-parallel-size 2,
-  --max-num-seqs 1, --gpu-memory-utilization 0.85
-
-## Summary: single-stream 2× B70 performance
-
-**Question**: "What about single stream on 2× B70s?"
-
-**Answer (UPDATED with TP2 PIECEWISE results)**:
-
-| Config | Hard tok/s | Easy tok/s | Notes |
-|--------|------------|------------|-------|
-| 1× B70 PIECEWISE MTP5 | 90.1 | — | Single GPU, best single-stream |
-| 2× B70 TP2 eager MTP5 | 37.4 | 52.0 | No cudagraph, all_reduce overhead dominates |
-| 2× B70 TP2 PIECEWISE MTP5 | **47.4** | **149.7** | Cudagraph eliminates launch overhead |
-| 2× B70 TP2 eager + 4 concurrent | — | 140.8 aggregate | Concurrent batching for aggregate throughput |
-
-**TP2 PIECEWISE single-stream easy task (149.7 tok/s) EXCEEDS the 120 tok/s target!**
-
-The easy task (counting, high MTP acceptance ~95%) benefits enormously from PIECEWISE:
-cudagraph eliminates Python dispatch overhead, and MTP5 with high acceptance means
-most tokens are verified in a single forward pass. The all_reduce latency is amortized
-across 6 tokens per step (1 target + 5 draft).
-
-The hard task (47.4 tok/s) is still below 1× (90.1) because:
-- Lower MTP acceptance (~75%) means more all_reduce calls per output token
-- B70s connect via PCIe (no XeLinks), so each all_reduce has ~0.5-1 ms latency
-- 64 layers × all_reduce per layer = 32-64 ms communication overhead per forward pass
-
-**How TP2 PIECEWISE was unlocked** (see Blocker 9 for full details):
-1. Replaced `_AllReduce_Kernel`/`_AllReduceKernel`/`_WaitKernel.codegen()` with parent
-   `_CollectiveKernel.codegen()` → compiled code uses runtime dispatch (Python op calls)
-   instead of CPU C shim.
-2. Monkey-patched `_empty_strided_cpu` → `_empty_strided_xpu` → collective buffers
-   allocated on XPU, making `copy_()` XPU→XPU (no D2H sync, works in command graph mode).
-3. Registered XPU kernels for `all_reduce_`, `all_reduce`, `wait_tensor`,
-   `all_gather_into_tensor`, `all_gather_into_tensor_out` → XCCL allreduce via direct
-   ProcessGroup calls (bypasses dispatcher, no re-entry).
+- **vllm-tp2-bmtp** (port 8020): vLLM lab TP2 eager MTP5, both B70 GPUs,
+  140.8 tok/s aggregate with 4 concurrent requests
+- **Patches applied**: mamba_utils.py (ctypes ptr fix), gdn_linear_attn.py (ESIMD eligibility),
+  utils.py (non_blocking=False), xpu_communicator.py (CPU gloo fallback),
+  --skip-mm-profiling, --enforce-eager, --tensor-parallel-size 2, --max-num-seqs 4
+| 37 | 2026-08-21 19:02 |  16concurrent_mtp8 | 30.9 hard / 56.4 easy / 0.0 conc×16 agg | ✅ | REGRESSION. Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=16.

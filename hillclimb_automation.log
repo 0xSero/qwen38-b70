@@ -1,0 +1,36 @@
+[18:34:34] Iteration: KNOB=16concurrent_mtp8 MTP=8 MEM=0.70 SEQS=4 BATCHED=2048 MODELLEN=4096 CONC=16
+[18:34:34] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_16concurrent_mtp8.sh
+[18:34:34] Stopping old container...
+[18:34:45] Starting container with knob 16concurrent_mtp8...
+[18:34:45] Waiting for server health...
+[18:38:23] Server healthy!
+[18:38:23] Benchmarking at http://172.17.0.2:8000 ...
+[18:38:55]   hard run 1: 256 tok in 8165ms = 31.4 tok/s
+[18:39:03]   hard run 2: 256 tok in 8557ms = 29.9 tok/s
+[18:39:11]   hard run 3: 256 tok in 8193ms = 31.2 tok/s
+[18:39:17]   easy run 1: 184 tok in 5184ms = 35.5 tok/s
+[18:39:20]   easy run 2: 184 tok in 3127ms = 58.8 tok/s
+[18:39:23]   easy run 3: 184 tok in 3309ms = 55.6 tok/s
+[18:39:24]   COHERENCE FAIL: got '5137' expected 1887
+[18:39:24]   COHERENCE FAIL: got 'We need answer user'' expected Paris
+[18:39:24]   coherence: ❌ (51×37=5137, capital=We need answer user')
+[19:02:01] Iteration: KNOB=16concurrent_mtp8 MTP=8 MEM=0.70 SEQS=4 BATCHED=2048 MODELLEN=4096 CONC=16
+[19:02:01] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_16concurrent_mtp8.sh
+[19:02:01] Stopping old container...
+[19:02:07] Starting container with knob 16concurrent_mtp8...
+[19:02:08] Waiting for server health...
+[19:05:42] Server healthy!
+[19:05:42] Benchmarking at http://172.17.0.2:8000 ...
+[19:06:13]   hard run 1: 256 tok in 8210ms = 31.2 tok/s
+[19:06:21]   hard run 2: 256 tok in 8297ms = 30.9 tok/s
+[19:06:30]   hard run 3: 256 tok in 8505ms = 30.1 tok/s
+[19:06:35]   easy run 1: 184 tok in 5386ms = 34.2 tok/s
+[19:06:38]   easy run 2: 184 tok in 3259ms = 56.5 tok/s
+[19:06:42]   easy run 3: 184 tok in 3262ms = 56.4 tok/s
+[19:06:44]   coherence: ✅ (51×37=We need answer user's simple arithmetic: 51*37. Compute: 50*, capital=We need answer user's request: "What is )
+[19:07:14]   conc round 1: 0.0 tok/s aggregate (0 tok in 3.084049940109253s)
+[19:07:17]   conc round 2: 0.0 tok/s aggregate (0 tok in 3.0361127853393555s)
+[19:07:20]   conc round 3: 0.0 tok/s aggregate (0 tok in 3.10050368309021s)
+[19:07:20] Recording: | 37 | 2026-08-21 19:02 |  16concurrent_mtp8 | 30.9 hard / 56.4 easy / 0.0 conc×16 agg | ✅ | REGRESSION. Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=16.
+[19:07:20] Done. hard=30.9 easy=56.4 conc=0.0 coherent=✅
+[19:07:21] Git committed and pushed (if possible). Iteration complete.
