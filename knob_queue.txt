@@ -11,7 +11,7 @@
 8conc_mtp8_seqs1|8|0.85|1|2048|4096|8|DONE|hard=45.4,easy=53.7,conc=44.6
 12conc_mtp8_seqs1|8|0.85|1|2048|4096|12|DONE|hard=46.4,easy=53.7,conc=44.3
 16conc_mtp8_seqs1|8|0.85|1|2048|4096|16|DONE|hard=45.9,easy=52.8,conc=45.4
-4conc_mtp5_seqs2|5|0.80|2|2048|4096|4
+4conc_mtp5_seqs2|5|0.80|2|2048|4096|4|DONE|hard=59.1,easy=68.4,conc=89.8
 8conc_mtp5_seqs2|5|0.80|2|2048|4096|8
 4conc_mtp8_seqs2|8|0.80|2|2048|4096|4
 8conc_mtp8_seqs2|8|0.80|2|2048|4096|8
