@@ -535,3 +535,25 @@ Error response from daemon: No such container: vllm-tp2-pw
 [23:54:44] Recording: | 84 | 2026-08-21 23:50 | ⭐ 8conc_mtp5_seqs2 | 55.6 hard / 65.5 easy / 86.4 conc×8 agg | ✅ | Config: MTP5, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
 [23:54:44] Done. hard=55.6 easy=65.5 conc=86.4 coherent=✅
 [23:54:44] Git committed and pushed (if possible). Iteration complete.
+[23:57:29] Iteration: KNOB=4conc_mtp8_seqs2 MTP=8 MEM=0.80 SEQS=2 BATCHED=2048 MODELLEN=4096 CONC=4
+[23:57:29] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_4conc_mtp8_seqs2.sh
+[23:57:29] === Container start attempt 1/2 ===
+[23:57:34] Starting container with knob 4conc_mtp8_seqs2 (attempt 1)...
+[23:57:37] Container IP: 172.17.0.3, health URL: http://172.17.0.3:8000/health (attempt 1)
+[23:57:37] Waiting for server health (attempt 1)...
+[00:01:14] Server healthy! (attempt 1)
+[00:01:40] Warmup OK, engine responsive (attempt 1)
+[00:01:42] Benchmarking at http://172.17.0.3:8000 ...
+[00:01:47]   hard run 1: 256 tok in 5312ms = 48.2 tok/s
+[00:01:53]   hard run 2: 256 tok in 5599ms = 45.7 tok/s
+[00:01:58]   hard run 3: 256 tok in 5505ms = 46.5 tok/s
+[00:02:02]   easy run 1: 184 tok in 3337ms = 55.1 tok/s
+[00:02:05]   easy run 2: 184 tok in 3514ms = 52.4 tok/s
+[00:02:09]   easy run 3: 184 tok in 3178ms = 57.9 tok/s
+[00:02:10]   coherence: ✅ (51×37=We need answer user's simple arithmetic: 51*37. Compute: 50*, capital=We need answer user's request: "What is )
+[00:02:45]   conc round 1: 48.1 tok/s aggregate (812 tok in 16.867233991622925s)
+[00:02:55]   conc round 2: 81.0 tok/s aggregate (812 tok in 10.028884172439575s)
+[00:03:06]   conc round 3: 74.5 tok/s aggregate (812 tok in 10.898091554641724s)
+[00:03:06] Recording: | 85 | 2026-08-21 23:57 |  4conc_mtp8_seqs2 | 46.5 hard / 55.1 easy / 74.5 conc×4 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=4.
+[00:03:06] Done. hard=46.5 easy=55.1 conc=74.5 coherent=✅
+[00:03:06] Git committed and pushed (if possible). Iteration complete.
