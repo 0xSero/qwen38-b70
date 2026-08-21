@@ -5,7 +5,7 @@
 # KNOWN-GOOD: MTP5, seqs=1, mem=0.85 → 47.4/149.7 single-stream — stable, GPUs healthy
 # FINDING: seqs=4 causes GPU OOM on block_table copy_to_gpu (cudagraphs use 5.8GB)
 # Strategy: use seqs=1/mem=0.85 (stable), test concurrency with queued requests
-8conc_mtp5_seqs1|5|0.85|1|2048|4096|8|FAIL|22:15:53|server_not_healthy
+8conc_mtp5_seqs1|5|0.85|1|2048|4096|8|DONE|hard=58.4,easy=71.5,conc=55.3
 12conc_mtp5_seqs1|5|0.85|1|2048|4096|12
 16conc_mtp5_seqs1|5|0.85|1|2048|4096|16
 8conc_mtp8_seqs1|8|0.85|1|2048|4096|8
