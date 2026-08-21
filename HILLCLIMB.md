@@ -281,3 +281,4 @@ batching, not dual independent instances.
 | 83 | 2026-08-21 23:43 | ⭐ 4conc_mtp5_seqs2 | 59.1 hard / 68.4 easy / 89.8 conc×4 agg | ✅ | NEW BEST single-stream hard (59.1 vs 58.4). Config: MTP5, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=4.
 | 84 | 2026-08-21 23:50 | ⭐ 8conc_mtp5_seqs2 | 55.6 hard / 65.5 easy / 86.4 conc×8 agg | ✅ | Config: MTP5, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
 | 85 | 2026-08-21 23:57 |  4conc_mtp8_seqs2 | 46.5 hard / 55.1 easy / 74.5 conc×4 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=4.
+| 86 | 2026-08-22 00:04 |  8conc_mtp8_seqs2 | 45.3 hard / 53.1 easy / 81.9 conc×8 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
