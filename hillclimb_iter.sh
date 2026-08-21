@@ -100,29 +100,41 @@ docker run -d --name "$CONTAINER" --privileged \
   --entrypoint /bin/bash "$IMAGE" /entrypoint.sh
 
 # ---------------------------------------------------------------------------
-# 4. Wait for health (up to 8 minutes)
+# 4. Wait for health (up to 10 minutes — compilation can take 3-5 min)
 # ---------------------------------------------------------------------------
 log "Waiting for server health..."
 HEALTHY=0
-for i in $(seq 1 160); do
+DEAD=0
+for i in $(seq 1 200); do
   if curl -sf "$CURL_URL/health" >/dev/null 2>&1; then
     HEALTHY=1
     break
   fi
-  # Check if container died
-  if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
-    log "Container died during startup"
-    break
+  # Check if container died (but only after 60s — compilation pauses docker state)
+  if [ "$i" -gt 20 ]; then
+    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
+      DEAD=1
+      log "Container died after $((i*3))s"
+      break
+    fi
   fi
   sleep 3
 done
 
 if [ "$HEALTHY" -ne 1 ]; then
-  log "FAIL: server not healthy after 8 min. Container logs (last 30 lines):"
+  if [ "$DEAD" -eq 1 ]; then
+    log "FAIL: container died (likely OOM-kill). Container logs (last 30 lines):"
+  else
+    log "FAIL: server not healthy after 10 min. Container logs (last 30 lines):"
+  fi
   docker logs --tail 30 "$CONTAINER" 2>&1 | tee -a "$LOG"
   echo "$KNOB_LINE|FAIL|$(date '+%H:%M:%S')|server_not_healthy" >> "$QUEUE"
-  ITER=$(( $(grep -c '|' "$HILL" 2>/dev/null || echo 45) + 1 ))
-  echo "| $ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — server not healthy, container died or timeout. See hillclimb_automation.log." >> "$HILL"
+  LAST_ITER=$(grep -oP '^\| \K[0-9]+' "$HILL" | sort -n | tail -1)
+  NEXT_ITER=$((LAST_ITER + 1))
+  echo "| $NEXT_ITER | $NOW | $KNOB_NAME | CRASH | — | FAIL — container died or timeout. Config: MTP${MTP}, mem=${MEM_UTIL}, seqs=${MAX_SEQS}, batched=${MAX_BATCHED}, modellen=${MAX_MODEL_LEN}, conc=${CONCURRENCY}. See hillclimb_automation.log." >> "$HILL"
+  cd "$REPO"
+  git add HILLCLIMB.md knob_queue.txt hillclimb_automation.log 2>/dev/null || true
+  git commit -m "hillclimb: $KNOB_NAME — CRASH (container died)" 2>/dev/null || true
   exit 1
 fi
 log "Server healthy!"

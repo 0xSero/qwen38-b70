@@ -2,17 +2,16 @@
 # Format: KNOB_NAME|MTP|MEM_UTIL|MAX_NUM_SEQS|MAX_BATCHED_TOKENS|MAX_MODEL_LEN|CONCURRENCY
 # The script reads the first un-marked line, runs it, and marks it DONE/FAIL.
 # Priority order: most promising first.
-# Note: concurrency > max_num_seqs means requests queue; mem_util must be low enough
-# to fit block tables for all queued requests.
-16conc_mtp8_seqs8|8|0.60|8|4096|4096|16
-maxseqs8_mtp8_8conc|8|0.70|8|4096|4096|8
-16conc_mtp8_seqs16|8|0.55|16|4096|4096|16
-maxseqs8_16conc_mtp8|8|0.60|8|4096|4096|16
-mtp6_maxseqs8|6|0.70|8|4096|4096|8
-mtp4_maxseqs8|4|0.72|8|4096|4096|8
+# Note: max_batched_tokens=4096 causes host OOM during compilation, stick to 2048.
+16conc_mtp8_seqs8|8|0.60|8|2048|4096|16
+maxseqs8_mtp8_8conc|8|0.70|8|2048|4096|8
+16conc_mtp8_seqs16|8|0.55|16|2048|4096|16
+maxseqs8_16conc_mtp8|8|0.60|8|2048|4096|16
+mtp6_maxseqs8|6|0.70|8|2048|4096|8
+mtp4_maxseqs8|4|0.72|8|2048|4096|8
 maxseqs2_mtp8_himem|8|0.85|2|2048|4096|4
 batched8k_mtp8|8|0.70|4|8192|4096|8
 mtp8_maxseqs4_himem|8|0.80|4|2048|4096|8
 maxmodel8k_mtp8|8|0.65|4|2048|8192|8
-mtp10_maxseqs8|10|0.65|8|4096|4096|8
+mtp10_maxseqs8|10|0.65|8|2048|4096|8
 mtp8_maxseqs4_0.75|8|0.75|4|2048|4096|8
