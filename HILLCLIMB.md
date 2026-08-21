@@ -275,3 +275,4 @@ batching, not dual independent instances.
 | 77 | 2026-08-21 22:27 | ⭐ 8conc_mtp5_seqs1 | 58.4 hard / 71.5 easy / 55.3 conc×8 agg | ✅ | NEW BEST single-stream hard (58.4 vs 50.5). Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
 | 78 | 2026-08-21 22:37 | 12conc_mtp5_seqs1 | CRASH | — | FAIL — engine died after warmup (DEVICE_LOST) on both attempts. Config: MTP5, mem=0.85, seqs=1, conc=12.
 | 79 | 2026-08-21 22:44 | ⭐ 16conc_mtp5_seqs1 | 55.0 hard / 67.1 easy / 53.4 conc×16 agg | ✅ | NEW BEST single-stream hard (55.0 vs 50.5). Config: MTP5, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=16.
+| 80 | 2026-08-21 22:52 |  8conc_mtp8_seqs1 | 45.4 hard / 53.7 easy / 44.6 conc×8 agg | ✅ | Config: MTP8, mem=0.85, seqs=1, batched=2048, modellen=4096, conc=8.
