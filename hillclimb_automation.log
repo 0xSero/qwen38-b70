@@ -108,3 +108,39 @@
 (Worker_TP0 pid=630) INFO 08-21 17:18:36 [backends.py:378] Cache the graph of compile range (1, 2048) for later use
 (EngineCore pid=480) INFO 08-21 17:19:21 [shm_broadcast.py:681] No available shared memory broadcast block found in 60 seconds. This typically happens when some processes are hanging or doing some time-consuming work (e.g. compilation, weight/kv cache quantization).
 (Worker_TP0 pid=630) INFO 08-21 17:19:24 [backends.py:393] Compiling a graph for compile range (1, 2048) takes 51.54 s
+[19:24:45] Iteration: KNOB=16conc_mtp8 MTP=8 MEM=0.65 SEQS=4 BATCHED=2048 MODELLEN=4096 CONC=16
+[19:24:45] Entrypoint written to /home/sero/qwen38-b70/entrypoints/ep_16conc_mtp8.sh
+[19:24:45] Stopping old container...
+[19:24:45] Starting container with knob 16conc_mtp8...
+[19:24:46] Waiting for server health...
+[19:34:51] FAIL: server not healthy after 10 min. Container logs (last 30 lines):
+(EngineCore pid=480) INFO 08-21 17:27:47 [kv_cache_utils.py:1711] Maximum concurrency for 4,096 tokens per request: 10.84x
+(Worker_TP0 pid=630) INFO 08-21 17:27:48 [utils.py:60] `_KV_CACHE_LAYOUT_OVERRIDE` variable detected. Setting KV cache layout to NHD.
+(Worker_TP0 pid=630) INFO 08-21 17:27:48 [kernel_warmup.py:44] Skipping FlashInfer autotune because it is disabled.
+(Worker_TP1 pid=631) INFO 08-21 17:27:48 [kernel_warmup.py:44] Skipping FlashInfer autotune because it is disabled.
+(Worker_TP0 pid=630) Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/12 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   8%|▊         | 1/12 [00:00<00:05,  2.10it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  17%|█▋        | 2/12 [00:00<00:04,  2.27it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  25%|██▌       | 3/12 [00:01<00:03,  2.40it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  33%|███▎      | 4/12 [00:01<00:03,  2.39it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  42%|████▏     | 5/12 [00:02<00:03,  2.26it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  50%|█████     | 6/12 [00:02<00:02,  2.17it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  58%|█████▊    | 7/12 [00:03<00:02,  2.25it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  67%|██████▋   | 8/12 [00:03<00:01,  2.32it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  75%|███████▌  | 9/12 [00:03<00:01,  2.34it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  83%|████████▎ | 10/12 [00:04<00:00,  2.44it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  92%|█████████▏| 11/12 [00:04<00:00,  2.47it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 12/12 [00:05<00:00,  2.45it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 12/12 [00:05<00:00,  2.35it/s]
+(Worker_TP0 pid=630) INFO 08-21 17:27:54 [gpu_model_runner.py:6288] Graph capturing finished in 6 secs, took 5.81 GiB
+(Worker_TP0 pid=630) INFO 08-21 17:27:54 [jit_monitor.py:54] Kernel JIT monitor activated — Triton JIT compilations during inference will be logged as warnings.
+(Worker_TP1 pid=631) INFO 08-21 17:27:54 [jit_monitor.py:54] Kernel JIT monitor activated — Triton JIT compilations during inference will be logged as warnings.
+(EngineCore pid=480) INFO 08-21 17:27:54 [core.py:302] init engine (profile, create kv cache, warmup model) took 122.13 s (compilation: 92.56 s)
+(EngineCore pid=480) INFO 08-21 17:27:56 [esimd_fake_ops.py:220] Registered fake impls for custom_esimd_kernels_vllm / moe_ops ops (torch.compile / XPU graph support).
+(EngineCore pid=480) [transformers] `Qwen2VLImageProcessorFast` is deprecated. The `Fast` suffix for image processors has been removed; use `Qwen2VLImageProcessor` instead.
+(EngineCore pid=480) [transformers] The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+(EngineCore pid=480) INFO 08-21 17:28:01 [vllm.py:895] Asynchronous scheduling is enabled.
+(EngineCore pid=480) INFO 08-21 17:28:01 [kernel.py:212] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+(EngineCore pid=480) WARNING 08-21 17:28:01 [vllm.py:1464] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate the additional draft token slots, or decrease num_speculative_tokens or max_num_seqs.
+(APIServer pid=1) INFO 08-21 17:28:01 [api_server.py:613] Supported tasks: ['generate']
+(APIServer pid=1) WARNING 08-21 17:28:01 [model.py:1454] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'temperature': 1.0, 'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
+(APIServer pid=1) INFO 08-21 17:28:02 [hf.py:483] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=1) INFO 08-21 17:28:15 [base.py:224] Multi-modal warmup completed in 12.825s
+(APIServer pid=1) INFO 08-21 17:28:15 [base.py:224] Readonly multi-modal warmup completed in 0.270s
+(APIServer pid=1) INFO 08-21 17:28:15 [api_server.py:617] Starting vLLM server on http://0.0.0.0:8000
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:37] Available routes are:
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:46] Route: /docs, Methods: GET, HEAD
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=1) INFO 08-21 17:28:15 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=1) INFO:     Started server process [1]
+(APIServer pid=1) INFO:     Waiting for application startup.
+(APIServer pid=1) INFO:     Application startup complete.

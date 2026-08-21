@@ -263,3 +263,4 @@ batching, not dual independent instances.
 | 37 | 2026-08-21 19:02 |  16concurrent_mtp8 | 30.9 hard / 56.4 easy / 0.0 conc×16 agg | ✅ | REGRESSION. Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=16.
 | 67 | 2026-08-21 19:11 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — server not healthy, container died or timeout. See hillclimb_automation.log.
 | 68 | 2026-08-21 19:17 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.60, seqs=8, batched=2048, modellen=4096, conc=16. See hillclimb_automation.log.
+| 69 | 2026-08-21 19:24 | 16conc_mtp8 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.65, seqs=4, batched=2048, modellen=4096, conc=16. See hillclimb_automation.log.
