@@ -7,7 +7,7 @@
 # Strategy: use seqs=1/mem=0.85 (stable), test concurrency with queued requests
 8conc_mtp5_seqs1|5|0.85|1|2048|4096|8|DONE|hard=58.4,easy=71.5,conc=55.3
 12conc_mtp5_seqs1|5|0.85|1|2048|4096|12|FAIL|22:39:30|engine_dead_after_warmup|device_lost
-16conc_mtp5_seqs1|5|0.85|1|2048|4096|16
+16conc_mtp5_seqs1|5|0.85|1|2048|4096|16|DONE|hard=55.0,easy=67.1,conc=53.4
 8conc_mtp8_seqs1|8|0.85|1|2048|4096|8
 12conc_mtp8_seqs1|8|0.85|1|2048|4096|12
 16conc_mtp8_seqs1|8|0.85|1|2048|4096|16
