@@ -7,7 +7,7 @@
 # mem<0.70 causes GPU OOM (too many KV blocks → block table zeroing fails).
 # Strategy: start from known-good 8-concurrent, push concurrency higher.
 8conc_mtp8_mem070|8|0.70|4|2048|4096|8|DONE|hard=50.5,easy=58.2,conc=interrupted
-12conc_mtp8_mem070|8|0.70|4|2048|4096|12
+12conc_mtp8_mem070|8|0.70|4|2048|4096|12|DONE|hard=48.7,easy=55.8,conc=134.8
 16conc_mtp8_mem070|8|0.70|4|2048|4096|16
 8conc_mtp6_mem070|6|0.70|4|2048|4096|8
 12conc_mtp6_mem070|6|0.70|4|2048|4096|12
