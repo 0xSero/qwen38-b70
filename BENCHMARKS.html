@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Qwen3.8-27B on Intel Arc Pro B70 — measured performance</title>
+<style>
+  body{font-family:Georgia,'Times New Roman',serif;max-width:58em;margin:2em auto;padding:0 1.5em;color:#111;background:#fff;line-height:1.45}
+  h1{font-size:1.5em;border-bottom:2px solid #333;padding-bottom:.3em;font-weight:normal}
+  h2{font-size:1.15em;margin-top:2em;border-bottom:1px solid #999;padding-bottom:.2em;font-weight:normal}
+  table{border-collapse:collapse;width:100%;font-size:.92em;margin:1em 0}
+  th,td{border:1px solid #999;padding:5px 9px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:#eee;font-weight:normal}
+  .bar{height:13px;background:#24457a;display:inline-block;vertical-align:middle}
+  .bar.alt{background:#7a4424}
+  .bar.mtp{background:#2a6b3a}
+  code{background:#f3f3f3;padding:0 3px;font-size:.9em}
+  .note{font-size:.85em;color:#444;margin-top:-0.5em}
+  td.w{width:9.5em}
+</style>
+</head>
+<body>
+
+<h1>Qwen3.8-27B (Q4_K_M, f16 KV) on Intel Arc Pro B70 — measured</h1>
+<p>llama.cpp (mndodd fork + b70-optimization-lab TP2 patches, SHA-verified), SYCL JIT via oneAPI 2025.3.3.
+Host: Arch kernel 7.1.8, xe driver. All numbers single-request, temperature&nbsp;0, batch 8192 / ubatch 8192.</p>
+
+<h2>Decode speed vs context</h2>
+<table>
+<tr><th class="w">Prompt context</th><th>2× B70 (TP2) tok/s</th><th></th><th>1× B70 tok/s</th><th></th></tr>
+<tr><td>~256</td><td>51</td><td><span class="bar" style="width:243px"></span></td><td>~33</td><td><span class="bar alt" style="width:157px"></span></td></tr>
+<tr><td>~2.5k</td><td>51.1</td><td><span class="bar" style="width:243px"></span></td><td>33.3</td><td><span class="bar alt" style="width:159px"></span></td></tr>
+<tr><td>~10k</td><td>50.9</td><td><span class="bar" style="width:243px"></span></td><td>33.4</td><td><span class="bar alt" style="width:159px"></span></td></tr>
+<tr><td>~40k</td><td>49.7</td><td><span class="bar" style="width:237px"></span></td><td>33.4</td><td><span class="bar alt" style="width:159px"></span></td></tr>
+<tr><td>~65k</td><td>46.9</td><td><span class="bar" style="width:224px"></span></td><td>31.9</td><td><span class="bar alt" style="width:152px"></span></td></tr>
+<tr><td>~128k</td><td>—</td><td></td><td>27.5</td><td><span class="bar alt" style="width:131px"></span></td></tr>
+<tr><td>~160k</td><td>42.0</td><td><span class="bar" style="width:200px"></span></td><td>—</td><td></td></tr>
+<tr><td>~245k</td><td>30.8</td><td><span class="bar" style="width:147px"></span></td><td>OOM ≥192k</td><td></td></tr>
+</table>
+<p class="note">Decode is nearly flat with context: only 16 of 64 layers are full attention (hybrid GDN);
+linear-attention layers are O(1) per token.</p>
+
+<h2>Prefill speed vs context</h2>
+<table>
+<tr><th class="w">Prompt context</th><th>2× B70 (TP2) tok/s</th><th></th><th>1× B70 tok/s</th><th></th></tr>
+<tr><td>~256</td><td>584</td><td><span class="bar" style="width:88px"></span></td><td>572</td><td><span class="bar alt" style="width:86px"></span></td></tr>
+<tr><td>~2.5k</td><td>955</td><td><span class="bar" style="width:143px"></span></td><td>1164</td><td><span class="bar alt" style="width:175px"></span></td></tr>
+<tr><td>~10k</td><td>881</td><td><span class="bar" style="width:132px"></span></td><td>1018</td><td><span class="bar alt" style="width:153px"></span></td></tr>
+<tr><td>~40k</td><td>694</td><td><span class="bar" style="width:104px"></span></td><td>785</td><td><span class="bar alt" style="width:118px"></span></td></tr>
+<tr><td>~65k</td><td>563</td><td><span class="bar" style="width:84px"></span></td><td>625</td><td><span class="bar alt" style="width:94px"></span></td></tr>
+<tr><td>~128k</td><td>—</td><td></td><td>426</td><td><span class="bar alt" style="width:64px"></span></td></tr>
+<tr><td>~160k</td><td>365</td><td><span class="bar" style="width:55px"></span></td><td>—</td><td></td></tr>
+<tr><td>~245k</td><td>275</td><td><span class="bar" style="width:41px"></span></td><td>—</td><td></td></tr>
+</table>
+<p class="note">Single-GPU prefill <i>beats</i> TP2 at every length — the tensor-parallel all-reduce costs more than
+the second card recovers. Use 2 GPUs for decode + KV capacity, 1 GPU for pure prefill-bound work.</p>
+
+<h2>MTP speculative decoding (mtp-Q4_0 draft, 2× B70)</h2>
+<table>
+<tr><th class="w">Task</th><th>tok/s</th><th></th><th>Draft acceptance</th></tr>
+<tr><td>Easy (counting)</td><td>84.3</td><td><span class="bar mtp" style="width:253px"></span></td><td>97.2%</td></tr>
+<tr><td>Hard (random numbers)</td><td>49.0</td><td><span class="bar mtp" style="width:147px"></span></td><td>37.5%</td></tr>
+<tr><td>Baseline, no MTP</td><td>51</td><td><span class="bar" style="width:153px"></span></td><td>—</td></tr>
+</table>
+
+<h2>Engine comparison (2× B70, same model family)</h2>
+<table>
+<tr><th class="w">Engine / path</th><th>Decode tok/s</th><th>Max context</th><th>Notes</th></tr>
+<tr><td>llama.cpp SYCL TP2 (this setup)</td><td><b>51</b></td><td>262,144</td><td>coherent, stable</td></tr>
+<tr><td>llama.cpp + MTP</td><td>84 (easy tasks)</td><td>262,144</td><td>quality-neutral</td></tr>
+<tr><td>vLLM XPU 0.27.2 FP8 (pinned lab image)</td><td>21.7</td><td>262,144*</td><td>*865k-token FP8 KV pool</td></tr>
+<tr><td>Intel llm-scaler 0.21 eager</td><td>—</td><td>—</td><td>crashed on first request</td></tr>
+</table>
+
+<h2>Capacity</h2>
+<table>
+<tr><th class="w">Configuration</th><th>Max validated context</th><th>KV precision</th><th>Weights</th></tr>
+<tr><td>2× B70 (TP2)</td><td>262,144</td><td>f16</td><td>18.97 GB (Q4_K_M, SHA-pinned)</td></tr>
+<tr><td>1× B70</td><td>131,072 (192k OOMs)</td><td>f16</td><td>18.97 GB</td></tr>
+<tr><td>4 slots × 65k (TP2)</td><td>65,536 each</td><td>f16</td><td>same</td></tr>
+</table>
+
+<h2>One-command setup</h2>
+<p><code>docker compose up -d</code> — configurable <code>GPU_COUNT=1|2</code>, <code>ENABLE_MTP</code>,
+<code>ENABLE_VISION</code>; downloads and SHA-verifies the pinned model on first start.
+2026-08-17, omarchy (2× Arc Pro B70 + 3× RTX 3090, Intel Xeon-class host).</p>
+
+</body>
+</html>

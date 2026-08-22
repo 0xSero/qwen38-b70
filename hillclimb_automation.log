@@ -578,3 +578,4 @@ Error response from daemon: No such container: vllm-tp2-pw
 [00:09:03]   conc round 3: 81.9 tok/s aggregate (1624 tok in 19.8239643573761s)
 [00:09:03] Recording: | 86 | 2026-08-22 00:04 |  8conc_mtp8_seqs2 | 45.3 hard / 53.1 easy / 81.9 conc×8 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
 [00:09:03] Done. hard=45.3 easy=53.1 conc=81.9 coherent=✅
+[00:09:03] Git committed and pushed (if possible). Iteration complete.

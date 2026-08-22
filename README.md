@@ -1,5 +1,39 @@
 # qwen38-b70
 
+Qwen3.8-27B inference on **two Intel Arc Pro B70 GPUs**.
+
+## vLLM (recommended — highest throughput)
+
+Using the Intel lab vLLM image (`intel/llm-scaler-vllm:0.21.0-b3`) with
+PIECEWISE cudagraph mode, AutoRound INT4 quantization, and MTP speculative decoding.
+
+**See [`DEFAULT_CONFIG.md`](DEFAULT_CONFIG.md) for the verified default configuration.**
+
+| Config | Single-stream | Concurrent ×8 | Use case |
+|--------|-------------:|--------------:|----------|
+| MTP2, seqs=8 | **85.3 tok/s** | 306.0 tok/s | Interactive / single-user |
+| MTP3, seqs=8 | 76.4 tok/s | **383.3 tok/s** | Multi-user / serving |
+
+Both configs are verified coherent. Entrypoint scripts in `entrypoints/`.
+Full benchmark history in [`HILLCLIMB.md`](HILLCLIMB.md).
+
+```bash
+# Start the best concurrent config
+docker run -d --name vllm-tp2-pw --privileged \
+    --device /dev/dri:/dev/dri --device /dev/dri/by-path:/dev/dri/by-path \
+    -v /path/to/model:/model:ro \
+    -v /path/to/entrypoints/ep_mtp3_seqs8.sh:/entrypoint.sh:ro \
+    -v /path/to/vllm_gloo_kernels.py:/tmp/vllm_gloo_kernels.py:ro \
+    -v /path/to/compile_cache:/root/.cache/vllm/torch_compile_cache \
+    -e VLLM_XPU_ENABLE_XPU_GRAPH=1 -e VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200 \
+    -e CCL_TOPO_FABRIC_VERTEX_CONNECTION_CHECK=0 -e UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 \
+    -e VLLM_WORKER_MULTIPROC_METHOD=spawn -e ZES_ENABLE_SYSMAN=1 \
+    -e CCL_ZE_IPC_EXCHANGE=sockets -e VLLM_LOGGING_LEVEL=INFO \
+    --entrypoint /bin/bash intel/llm-scaler-vllm:0.21.0-b3 /entrypoint.sh
+```
+
+## llama.cpp SYCL (alternative — long context)
+
 One-command Qwen3.8-27B inference server on **two Intel Arc Pro B70 GPUs**,
 tensor-parallel llama.cpp (SYCL), 262k context, OpenAI-compatible API.
 

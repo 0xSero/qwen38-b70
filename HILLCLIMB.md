@@ -14,7 +14,9 @@ Repo local: `/Users/sero/sessions/qwen38-b70/`. Sync edits to host with `scp`.
 | Config | GPU(s) | Decode tok/s | Prefill tok/s | Coherent | Notes |
 |--------|---------|-------------:|---------------:|----------|-------|
 | ⭐⭐⭐ vLLM lab v0.21.1 PIECEWISE, AutoRound INT4, MTP5, fp16 | 1× B70 | **90.1** hard | — | ✅ | TARGET EXCEEDED. 95.2% acceptance, mean acc len 5.76. intel/llm-scaler-vllm:0.21.0-b3 + ctypes ptr fix + --dtype float16. |
-| ⭐⭐⭐ vLLM lab v0.21.1 TP2 eager, AutoRound INT4, MTP5, fp16, 4 concurrent | 2× B70 | **140.8** aggregate | — | ✅ | TARGET EXCEEDED. TP2 + MTP5 + 4 concurrent requests. XCCL all_reduce with CPU gloo fallback for profile_run. Patches: GDN ESIMD eligibility, non_blocking=False, ctypes ptr fix. |
+| ⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP2, fp16, seqs=8 | 2× B70 | **85.3** hard / **81.1** easy / **306.0** conc×8 agg | — | ✅ | BEST SINGLE-STREAM. MTP2 (mean acc len 2.61, 80% draft acceptance). seqs=8 enables decode batching across 8 sequences. 44% over previous single-stream best (59.1). |
+| ⭐⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP3, fp16, seqs=8 | 2× B70 | **72.9** hard / **70.8** easy / **392.9** conc×8 agg | — | ✅ | BEST CONCURRENT. MTP3 (mean acc len 2.84, 63% draft acceptance). seqs=8 for decode batching. 191% over previous concurrent best (134.8). |
+| ⭐⭐⭐ vLLM lab v0.21.1 TP2 eager, AutoRound INT4, MTP5, fp16, 4 concurrent | 2× B70 | **140.8** aggregate | — | ✅ | Previous best (eager mode, no cudagraph). TP2 + MTP5 + 4 concurrent. |
 | ⭐⭐ vLLM lab v0.21.1 TP2 PIECEWISE, AutoRound INT4, MTP5, fp16, seqs=1 | 2× B70 | **58.4** hard / **71.5** easy / 55.3 conc×8 agg | — | ✅ | Hill-climb iter 77. PIECEWISE cudagraph mode, seqs=1, mem=0.85. Persistent compile cache volume. Single-stream hard beats previous PIECEWISE best (50.5). |
 | ⭐⭐ Q4_K_M, KV f16, TP2, MTP n-max=5, threads=16, Q4K SwiGLU fusion | 2× B70 | 66.6 hard / 90.1 easy | 935 | ✅ | llama.cpp best (previous). MTP draft on CPU. |
 | ⭐ Q4_K_M, KV f16, MTP n-max=5, Q4K SwiGLU fusion | 1× B70 | 43.0 hard / 56.1 easy | — | ✅ | llama.cpp best 1-GPU (previous). |
@@ -256,11 +258,19 @@ batching, not dual independent instances.
 
 ## What's running now
 
-- **vllm-tp2-bmtp** (port 8020): vLLM lab TP2 eager MTP5, both B70 GPUs,
-  140.8 tok/s aggregate with 4 concurrent requests
+- **vllm-tp2-pw** (port 8000): vLLM lab TP2 PIECEWISE, MTP3, seqs=8, mem=0.80, both B70 GPUs.
+  Best concurrent config: 392.9 tok/s aggregate (403.0 best trial) with 8 concurrent requests.
+  Best single-stream config: MTP2/seqs=8 at 85.3 tok/s hard.
+- **Key insight**: Reducing MTP from 5 to 2-3 draft tokens eliminates wasted draft compute
+  (positions 4-5 had ~0% acceptance). Increasing max_num_seqs from 2 to 8 enables decode
+  batching across concurrent sequences, dramatically improving GPU utilization on 256 EUs.
 - **Patches applied**: mamba_utils.py (ctypes ptr fix), gdn_linear_attn.py (ESIMD eligibility),
   utils.py (non_blocking=False), xpu_communicator.py (CPU gloo fallback),
-  --skip-mm-profiling, --enforce-eager, --tensor-parallel-size 2, --max-num-seqs 4
+  vllm_gloo_kernels.py (inductor codegen patches for TP2 PIECEWISE),
+  comm_lowering.py (split coalesced ops), distributed_c10d.py (disable coalescing during profile),
+  gpu_worker.py (CPU gloo for profile_run), --skip-mm-profiling,
+  --tensor-parallel-size 2, --max-num-seqs 8, --gpu-memory-utilization 0.80,
+  --speculative-config MTP3, PIECEWISE cudagraph mode
 | 37 | 2026-08-21 19:02 |  16concurrent_mtp8 | 30.9 hard / 56.4 easy / 0.0 conc×16 agg | ✅ | REGRESSION. Config: MTP8, mem=0.70, seqs=4, batched=2048, modellen=4096, conc=16.
 | 67 | 2026-08-21 19:11 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — server not healthy, container died or timeout. See hillclimb_automation.log.
 | 68 | 2026-08-21 19:17 | 16conc_mtp8_seqs8 | CRASH | — | FAIL — container died or timeout. Config: MTP8, mem=0.60, seqs=8, batched=2048, modellen=4096, conc=16. See hillclimb_automation.log.
@@ -282,3 +292,14 @@ batching, not dual independent instances.
 | 84 | 2026-08-21 23:50 | ⭐ 8conc_mtp5_seqs2 | 55.6 hard / 65.5 easy / 86.4 conc×8 agg | ✅ | Config: MTP5, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
 | 85 | 2026-08-21 23:57 |  4conc_mtp8_seqs2 | 46.5 hard / 55.1 easy / 74.5 conc×4 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=4.
 | 86 | 2026-08-22 00:04 |  8conc_mtp8_seqs2 | 45.3 hard / 53.1 easy / 81.9 conc×8 agg | ✅ | Config: MTP8, mem=0.80, seqs=2, batched=2048, modellen=4096, conc=8.
+| 87 | 2026-08-22 00:30 | ⭐ mtp3_seqs2 | 73.7 hard / 67.7 easy / 143.2 conc×8 agg | ✅ | KERNEL-LEVEL: MTP3 (reduce draft tokens from 5→3, positions 4-5 had ~0% acceptance). seqs=2, mem=0.80. 24% over baseline single. |
+| 88 | 2026-08-22 00:40 | ⭐ mtp3_seqs4 | 75.5 hard / 73.7 easy / 244.2 conc×8 agg | ✅ | seqs=4 enables decode batching. 28% single / 81% concurrent over baseline. |
+| 89 | 2026-08-22 00:50 | ⭐ mtp2_seqs4 | 72.1 hard / 77.4 easy / 231.1 conc×8 agg | ✅ | MTP2 (2 draft tokens). Lower draft compute, 80% acceptance. |
+| 90 | 2026-08-22 00:55 | ⭐⭐ mtp2_seqs8 | 85.3 hard / 81.1 easy / 306.0 conc×8 agg | ✅ | NEW BEST single-stream. seqs=8 for decode batch. MTP2 minimal overhead. 44% over baseline. |
+| 91 | 2026-08-22 01:00 | ⭐⭐ mtp3_seqs8 | 72.9 hard / 70.8 easy / 392.9 conc×8 agg | ✅ | NEW BEST concurrent. MTP3+seqs=8. 403.0 best trial. 191% over baseline. |
+| 92 | 2026-08-22 01:05 |  mtp1_seqs8 | 65.1 hard / 66.3 easy / 352.3 conc×8 agg | ✅ | MTP1 (1 draft token). Lower single-stream, good concurrent. |
+| 93 | 2026-08-22 01:15 |  mtp3_seqs10_mem075 | 75.8 hard / 73.2 easy / 348.3 conc×8 / 397.8 conc×10 agg | ✅ | seqs=10 with mem=0.75. conc×10=438.5 best trial but lower mem hurts single. |
+| 94 | 2026-08-22 01:20 |  mtp3_seqs16 | CRASH | — | FAIL — OOM (UR_RESULT_ERROR_OUT_OF_RESOURCES). seqs=16 + batched=8192 too much for 32GB. |
+| 95 | 2026-08-22 01:25 |  mtp3_seqs12 | CRASH | — | FAIL — OOM. seqs=12 + batched=4096 still too much. |
+| 96 | 2026-08-22 01:30 |  mtp3_seqs8_mem085 | CRASH | — | FAIL — OOM at mem=0.85. mem=0.80 is the max for 27B INT4 + KV cache + compile intermediates. |
+| 97 | 2026-08-22 01:35 | ⭐⭐ ESIMD_INT4_bridge | 60.0 hard / 59.9 easy / 48.7 conc×4 agg | ✅ | ESIMD INT4 GEMV bridge: patched INC apply() to dispatch to esimd_gemv_int4 for M==1. No improvement (bandwidth-bound). GEMM path (M>=2) regressed concurrent 45% vs baseline. Reverted to GEMV-only. |

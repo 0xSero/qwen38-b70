@@ -1,0 +1,13 @@
+# Compile cache (Docker volume, 600MB+)
+compile_cache/
+
+# Hillclimb lock and logs
+hillclimb.lock
+hillclimb_automation.log
+
+# Models (too large for git)
+models/
+
+# Python cache
+__pycache__/
+*.pyc
