@@ -28,13 +28,13 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/0xsero/qwen38-b70:attested
+          tags: ghcr.io/0xsero/qwen38-b70-attested:v1
           provenance: mode=max
           sbom: true
       - name: Attest build provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
-          subject-name: ghcr.io/0xsero/qwen38-b70
+          subject-name: ghcr.io/0xsero/qwen38-b70-attested
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
       - name: Print digest
