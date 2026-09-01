@@ -37,7 +37,7 @@ RUN cd /build/llama.cpp \
         -DCMAKE_C_COMPILER=/usr/bin/cc \
         -DCMAKE_CXX_COMPILER="$(command -v icpx)" \
         -DBUILD_SHARED_LIBS=ON \
-        -DGGML_NATIVE=ON -DLLAMA_CURL=OFF \
+        -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF \
         -DGGML_SYCL=ON -DGGML_SYCL_TARGET=INTEL \
         -DGGML_SYCL_F16=ON -DGGML_SYCL_GRAPH=OFF -DGGML_SYCL_DNN=OFF \
         -DGGML_SYCL_HOST_MEM_FALLBACK=OFF \
